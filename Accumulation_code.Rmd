@@ -1,0 +1,94 @@
+---
+title: "Species Accumulation Curves"
+author: "Jackson Hoeke"
+date: "January 13, 2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+### Load packages ###
+
+library(ggplot2)
+library(tidyverse)
+library(plyr)
+library(dplyr)
+```
+
+```{r}
+### Generate function ###
+
+## As of now, this function is designed to create a single species accumulation curve for 1 year for one MPA or reference site ##
+
+curve <- function(df){
+  
+  grp.line <- df %>%
+    group_by_all() %>%
+    mutate(newnames=paste0(Line))
+  
+  split.line <- split(grp.line, grp.line$newnames)
+  for (I in 1:length(split.line)) {assign(unique(split.line[[I]]$newnames), split.line[[I]])}
+  
+  reassemble <- lapply(split.line, function(x){
+    x[is.na(x)] <- -Inf
+    x <- mutate(x, cumulative_XY = cumsum(x$XY.dist))
+    x <- mutate(x, cumulative_species = cummax(as.numeric(factor(x$SpeciesName, levels = unique(x$SpeciesName))))-1)
+  })
+  rebound <- as.data.frame(bind_rows(reassemble))
+  
+  grp.species <- rebound %>%
+    group_by_all() %>%
+    mutate(newnames=paste0(cumulative_species))
+  
+  split.species <- split(grp.species, grp.species$newnames)
+  for (I in 1:length(split.species)) {assign(unique(split.species[[I]]$newnames), split.species[[I]])}
+  
+  take_average <- lapply(split.species, function(x){
+    x %>%
+      group_by(cumulative_species) %>%
+      summarise(average_XY = as.numeric(mean(cumulative_XY)),
+                cumulative_species = mean(cumulative_species))
+  })
+  
+  final <- as.data.frame(bind_rows(take_average))
+  final <- mutate(final, true_XY = as.numeric(average_XY))
+  final[,'true_XY']=round(final[,'true_XY'],1)
+  
+  ggplot(final, aes(x = average_XY, y = cumulative_species)) +
+    geom_point() +
+    stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1)
+  
+}
+```
+
+```{r}
+### Example ###
+
+Anacapa <- data.frame(read.csv("Anacapa_Island_Observations_2005-2016.csv"))
+Anacapa_2005 <- subset(Anacapa, Year == "2005")
+curve(Anacapa_2005)
+```
+
