@@ -7,43 +7,18 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
-```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
-
-```{r}
 ### This code uses Sydney's ggplot code for the response ratios to make response ratios across all years ###
 
+```{r}
 ### Load packages ###
-
 library(ggplot2)
 library(ggpubr)
 library(tidyverse)
 library(plyr)
 library(dplyr)
-
 ```
-
-```{r}
-
 ### Load data and write function ###
-
+```{r}
 base_data <- data.frame(read.csv("Habitat_densities.csv"))
 
 response_ratio <- function(df, column, title, subtitle){
@@ -91,39 +66,40 @@ response_ratio <- function(df, column, title, subtitle){
   
   Survey_Year <- c(2005, 2006, 2007, 2008, 2009, 2011, 2012, 2014, 2015, 2016)
   
-  data <- data.frame(logmeans, logerrors, Survey_Year)
+  data <- data.frame(logmeans, logerrors, Survey_Year, title, subtitle)
   
-  ggplot(data, aes(x=Survey_Year, y=logmeans)) + 
-    geom_point(shape=21,size=3, alpha=0.5, position=position_dodge(0.9), fill="red")+
-    ylab('Response Ratio (Density)')+
-    xlab('Years')+ geom_hline(yintercept = 0, linetype="dashed")+
-    geom_errorbar(aes(ymax=logmeans+logerrors, ymin=logmeans-logerrors),
-                  position=position_dodge(0.9), width=0)+
-    scale_y_continuous(breaks= pretty_breaks())+coord_flip()+
-    ggtitle(title, subtitle)+
-    theme(plot.title = element_text(size = 16, face = "bold"))
+  # ggplot(data, aes(x=Survey_Year, y=logmeans)) + 
+  #   geom_point(shape=21,size=3, alpha=0.5, position=position_dodge(0.9), fill="red")+
+  #   ylab('Response Ratio (Density)')+
+  #   xlab('Years')+ geom_hline(yintercept = 0, linetype="dashed")+
+  #   geom_errorbar(aes(ymax=logmeans+logerrors, ymin=logmeans-logerrors),
+  #                 position=position_dodge(0.9), width=0)+
+  #   # scale_y_continuous(breaks= pretty_breaks())+coord_flip()+
+  #   scale_y_continuous()+coord_flip()+
+  #   ggtitle(title, subtitle)+
+  #   theme(plot.title = element_text(size = 16, face = "bold"))
 }
 ```
-
+##Start running datasets##
+To save the outputs of these functions as data that can be manipulated, plotted, and compared, run functions and save each one to a unique variable name.
 ```{r}
-### Start running data sets ###
 
 ## Species ##
 
-response_ratio(base_data, 36, "Parastichopus californicus", " ") ## sea cucumber ##
-response_ratio(base_data, 32, "Stylaster californicus", " ") ## hydrocoral ##
-response_ratio(base_data, 56, "Urticina piscivora", " ") ## Fish-eating anemone ##
-response_ratio(base_data, 79, "Tethya aurantia", " ") ## Puffball sponge ##
-response_ratio(base_data, 95, "Mediaster aequalis", " ") ## Red sea star ##
-response_ratio(base_data, 96, "Mesocentrotus franciscana", " ") ## Red sea urchin ##
-response_ratio(base_data, 121, "Pycnopodia helianthoides", " ") ## Sunflower star ##
-response_ratio(base_data, 173, "Stylatula elongata", " ") ## White sea pen ##
+Parastichopus_californicusRR <- response_ratio(base_data, 36, "Parastichopus californicus", " ") ## sea cucumber ##
+Stylaster_californicusRR <- response_ratio(base_data, 32, "Stylaster californicus", " ") ## hydrocoral ##
+Urticina_piscivoraRR <- response_ratio(base_data, 56, "Urticina piscivora", " ") ## Fish-eating anemone ##
+Tethya_aurantiaRR <- response_ratio(base_data, 79, "Tethya aurantia", " ") ## Puffball sponge ##
+Mediaster_aequalisRR <- response_ratio(base_data, 95, "Mediaster aequalis", " ") ## Red sea star ##
+Mesocentrotus_franciscanaRR <- response_ratio(base_data, 96, "Mesocentrotus franciscana", " ") ## Red sea urchin ##
+Pycnopodia_helianthoidesRR <- response_ratio(base_data, 121, "Pycnopodia helianthoides", " ") ## Sunflower star ##
+Stylatula_elongataRR <- response_ratio(base_data, 173, "Stylatula elongata", " ") ## White sea pen ##
 
 ## Functional Groups ##
 
 response_ratio(base_data, 179, "Actiniaria", " ") ## Anemones ##
 response_ratio(base_data, 180, "Alcyonacea", " ") ## Soft corals ##
-response_ratio(base_data, 181, "Asteroidea", " ") ## Sea stars ##
+AsteroideaRR <- response_ratio(base_data, 181, "Asteroidea", " ") ## Sea stars ##
 response_ratio(base_data, 182, "Echinoidea", " ") ## Sea urchins ##
 response_ratio(base_data, 183, "Holothuroidea", " ") ## Sea cucumbers ##
 response_ratio(base_data, 184, "Malacostraca", " ") ## Crabs and allies ##
@@ -336,5 +312,33 @@ response_ratio(Channel.Islands, 184, "Malacostraca", "Channel.Islands") ## Crabs
 response_ratio(Channel.Islands, 185, "Pennatulacea", "Channel.Islands") ## Sea pens ##
 response_ratio(Channel.Islands, 186, "Porifera", "Channel.Islands") ## Sponges ##
 
+```
+##Plot comparisons
+These commands should be general for whatever comparisons you may wish to add to your plot. If you need to compare more than 2, then just add a variableC and add that to the variables list. What I am not sure about is how the naming conventions worked. Some of that might need additional modification. 
+```{r}
+#Inputs to enter
+variableA <- Mediaster_aequalisRR
+variableB <- AsteroideaRR
+
+variables <- bind_rows(variableA,variableB)
+
+plotRR <- ggplot(variables, aes(x=Survey_Year, y=logmeans, color=title)) + 
+  geom_point(size=4) +
+  geom_errorbar(aes(ymax=logmeans+logerrors, ymin=logmeans-logerrors),color="black",alpha=0.3,width=0.3) +
+  geom_line(aes(group = title),linetype="dashed") +
+  scale_color_brewer(palette="Set1",name="Group") +
+  ylab('Response Ratio (Density)') +
+  scale_x_continuous(name="Years",breaks = c(2005:2015),minor_breaks=NULL) +
+  # scale_color_discrete(name = "Group") +
+  geom_hline(yintercept = 0, linetype="dashed")+
+  theme_classic() +
+  theme(
+        legend.position = c(0.9,0.9)
+        )
+plotRR
+comparison_string <- str_c(unique(variables$title),collapse="_")
+filename <- str_c('Comparisons\\RR_',comparison_string,'.png')
+writeLines(filename)
+ggsave(filename)
 ```
 
