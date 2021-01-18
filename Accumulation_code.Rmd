@@ -42,6 +42,7 @@ library(dplyr)
 ### Generate function ###
 
 ## As of now, this function is designed to create a single species accumulation curve for 1 year for one MPA or reference site ##
+## This is now obsolete due to the 2.0 and 3.0 versions below ##
 
 curve <- function(df){
   
@@ -90,5 +91,199 @@ curve <- function(df){
 Anacapa <- data.frame(read.csv("Anacapa_Island_Observations_2005-2016.csv"))
 Anacapa_2005 <- subset(Anacapa, Year == "2005")
 curve(Anacapa_2005)
+```
+
+```{r}
+
+### This function creates a plot with a data spread and trendline for each year ###
+### The data frame to be used should be subset into either MPA or Reference designation prior ###
+
+curve2.0  <- function(df){
+  
+  grp.line <- df %>%
+    group_by_all() %>%
+    mutate(newnames=paste0(Year, Line))
+  
+  split.line <- split(grp.line, grp.line$newnames)
+  for (I in 1:length(split.line)) {assign(unique(split.line[[I]]$newnames), split.line[[I]])}
+  
+  reassemble <- lapply(split.line, function(x){
+    x[is.na(x)] <- -Inf
+    x <- mutate(x, cumulative_XY = cumsum(x$XY.dist))
+    x <- mutate(x, cumulative_species = cummax(as.numeric(factor(x$SpeciesName, levels = unique(x$SpeciesName))))-1)
+  })
+  rebound <- as.data.frame(bind_rows(reassemble))
+  
+  grp.year <- rebound %>%
+    group_by_all() %>%
+    mutate(newnames=paste0(Year))
+  
+  split.year <- split(grp.year, grp.year$newnames)
+  for (I in 1:length(split.year)) {assign(unique(split.year[[I]]$newnames), split.year[[I]])}
+  
+  year_by_year <- lapply(split.year, function(x){
+    
+    grp.species <- x %>%
+      group_by_all() %>%
+      mutate(newnames=paste0(cumulative_species))
+    
+    split.species <- split(grp.species, grp.species$newnames)
+    for (I in 1:length(split.species)) {assign(unique(split.species[[I]]$newnames), split.species[[I]])}
+    
+    std <- function(x){
+      sd(x)/sqrt(length(x))
+    }
+    
+    stds <- as.numeric(unlist(lapply(split.species, function(t){
+      c(std(t$cumulative_XY))
+    })))
+    
+    distance <- x$cumulative_XY
+    species <- x$cumulative_species
+    
+    plot(species~distance,
+         xlab="Average transect distance (m)",
+         ylab="# of species",
+         xlim=c(0, 200),
+         ylim=c(0, 30),
+         col = ifelse(x$Year == "2005", rgb(red = 255, green = 0, blue = 0, alpha = 15, maxColorValue=255),
+                      ifelse(x$Year == "2006", rgb(red = 255, green = 128, blue = 0, alpha = 15, maxColorValue=255),
+                             ifelse(x$Year == "2007", rgb(red = 255, green = 255, blue = 0, alpha = 15, maxColorValue=255),
+                                    ifelse(x$Year == "2008", rgb(red = 0, green = 255, blue = 0, alpha = 15, maxColorValue=255),
+                                           ifelse(x$Year == "2009", rgb(red = 0, green = 255, blue = 255, alpha = 15, maxColorValue=255),
+                                                  ifelse(x$Year == "2011", rgb(red = 0, green = 128, blue = 255, alpha = 15, maxColorValue=255),
+                                                         ifelse(x$Year == "2012", rgb(red = 0, green = 0, blue = 255, alpha = 15, maxColorValue=255),
+                                                                ifelse(x$Year == "2014", rgb(red = 127, green = 0, blue = 255, alpha = 15, maxColorValue=255),
+                                                                       ifelse(x$Year == "2015", rgb(red = 255, green = 0, blue = 255, alpha = 15, maxColorValue=255),
+                                                                              ifelse(x$Year == "2016", rgb(red = 255, green = 0, blue = 127, alpha = 15, maxColorValue=255), "black")))))))))))
+    
+    fit <- lm(species ~log(distance))
+    coef(fit)
+    
+    
+    
+    distance = seq(from=1,to=200,length.out=1000)
+    species = predict(fit,newdata=list(x=seq(from=1,to=200,length.out=1000)),
+                      interval="confidence")
+    matlines(distance, species,lwd=2,col = ifelse(x$Year == "2005", rgb(red = 255, green = 0, blue = 0, alpha = 255, maxColorValue=255),
+                                                  ifelse(x$Year == "2006", rgb(red = 255, green = 128, blue = 0, alpha = 255, maxColorValue=255),
+                                                         ifelse(x$Year == "2007", rgb(red = 255, green = 255, blue = 0, alpha = 255, maxColorValue=255),
+                                                                ifelse(x$Year == "2008", rgb(red = 0, green = 255, blue = 0, alpha = 255, maxColorValue=255),
+                                                                       ifelse(x$Year == "2009", rgb(red = 0, green = 255, blue = 255, alpha = 255, maxColorValue=255),
+                                                                              ifelse(x$Year == "2011", rgb(red = 0, green = 128, blue = 255, alpha = 255, maxColorValue=255),
+                                                                                     ifelse(x$Year == "2012", rgb(red = 0, green = 0, blue = 255, alpha = 255, maxColorValue=255),
+                                                                                            ifelse(x$Year == "2014", rgb(red = 127, green = 0, blue = 255, alpha = 255, maxColorValue=255),
+                                                                                                   ifelse(x$Year == "2015", rgb(red = 255, green = 0, blue = 255, alpha = 255, maxColorValue=255),
+                                                                                                          ifelse(x$Year == "2016", rgb(red = 255, green = 0, blue = 127, alpha = 255, maxColorValue=255), "black")))))))))))
+    legend("topleft",
+           legend=c("2005", "2006", "2007", "2008", "2009", "2011", "2012", "2014", "2015", "2016"),
+           col=c(rgb(red = 255, green = 0, blue = 0, alpha = 255, maxColorValue=255),
+                 rgb(red = 255, green = 128, blue = 0, alpha = 255, maxColorValue=255),
+                 rgb(red = 255, green = 255, blue = 0, alpha = 255, maxColorValue=255),
+                 rgb(red = 0, green = 255, blue = 0, alpha = 255, maxColorValue=255),
+                 rgb(red = 0, green = 255, blue = 255, alpha = 255, maxColorValue=255),
+                 rgb(red = 0, green = 128, blue = 255, alpha = 255, maxColorValue=255),
+                 rgb(red = 0, green = 0, blue = 255, alpha = 255, maxColorValue=255),
+                 rgb(red = 127, green = 0, blue = 255, alpha = 255, maxColorValue=255),
+                 rgb(red = 255, green = 0, blue = 255, alpha = 255, maxColorValue=255),
+                 rgb(red = 255, green = 0, blue = 127, alpha = 255, maxColorValue=255), "black"),
+           lwd=2)
+    
+    par(new=T)
+    
+  })
+
+}
+```
+
+```{r}
+### Examples ###
+
+Anacapa <- data.frame(read.csv("Anacapa_Island_Observations_2005-2016.csv"))
+curve2.0(Anacapa)
+
+```
+
+```{r}
+### This function is similar, but it divides the data into MPA and Reference sites, with a trendline for each ###
+
+curve3.0  <- function(df){
+  
+  grp.line <- df %>%
+    group_by_all() %>%
+    mutate(newnames=paste0(Year, Line))
+  
+  split.line <- split(grp.line, grp.line$newnames)
+  for (I in 1:length(split.line)) {assign(unique(split.line[[I]]$newnames), split.line[[I]])}
+  
+  reassemble <- lapply(split.line, function(x){
+    x[is.na(x)] <- -Inf
+    x <- mutate(x, cumulative_XY = cumsum(x$XY.dist))
+    x <- mutate(x, cumulative_species = cummax(as.numeric(factor(x$SpeciesName, levels = unique(x$SpeciesName))))-1)
+  })
+  rebound <- as.data.frame(bind_rows(reassemble))
+  
+  grp.des <- rebound %>%
+    group_by_all() %>%
+    mutate(newnames=paste0(Designation))
+  
+  split.des <- split(grp.des, grp.des$newnames)
+  for (I in 1:length(split.des)) {assign(unique(split.des[[I]]$newnames), split.des[[I]])}
+  
+  designation <- lapply(split.des, function(x){
+    
+    grp.species <- x %>%
+      group_by_all() %>%
+      mutate(newnames=paste0(cumulative_species))
+    
+    split.species <- split(grp.species, grp.species$newnames)
+    for (I in 1:length(split.species)) {assign(unique(split.species[[I]]$newnames), split.species[[I]])}
+    
+    std <- function(x){
+      sd(x)/sqrt(length(x))
+    }
+    
+    stds <- as.numeric(unlist(lapply(split.species, function(t){
+      c(std(t$cumulative_XY))
+    })))
+    
+    distance <- x$cumulative_XY
+    species <- x$cumulative_species
+    
+    plot(species~distance,
+         xlab="Average transect distance (m)",
+         ylab="# of species",
+         xlim=c(0, 200),
+         ylim=c(0, 30),
+         col = ifelse(x$Designation == "MPA", rgb(red = 255, green = 0, blue = 0, alpha = 15, maxColorValue=255),
+                      ifelse(x$Designation == "Reference", rgb(red = 0, green = 0, blue = 255, alpha = 15, maxColorValue=255), "black")))
+    
+    fit <- lm(species ~log(distance))
+    coef(fit)
+    
+    distance = seq(from=1,to=200,length.out=1000)
+    species = predict(fit,newdata=list(x=seq(from=1,to=200,length.out=1000)),
+                      interval="confidence")
+    matlines(distance, species,lwd=2,col = ifelse(x$Designation == "MPA", rgb(red = 255, green = 0, blue = 0, alpha = 255, maxColorValue=255),
+                                                  ifelse(x$Designation == "Reference", rgb(red = 0, green = 0, blue = 255, alpha = 255, maxColorValue=255), "black")))
+                                                                                            
+    legend("topleft",
+           legend=c("MPA", "Reference"),
+           col=c(rgb(red = 255, green = 0, blue = 0, alpha = 255, maxColorValue=255),
+                 rgb(red = 0, green = 0, blue = 255, alpha = 255, maxColorValue=255), "black"),
+           lwd=2)
+    
+    par(new=T)
+    
+  })
+  
+}
+```
+
+```{r}
+### Example ###
+
+Carrington <- data.frame(read.csv("Carrington_Point_Observations_2005-2016.csv"))
+curve3.0(Carrington)
 ```
 
