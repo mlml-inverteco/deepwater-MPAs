@@ -1,0 +1,323 @@
+---
+title: "Functional Group Depths"
+author: "Jackson Hoeke"
+date: "February 3, 2021"
+output: html_document
+---
+
+```{r}
+### Load packages ###
+
+library(pwr)
+library(sjstats)
+library(tidyverse)
+library(plyr)
+library(dplyr)
+library(scales)
+
+### Access Data ###
+
+data <- data.frame(read.csv("Habitat_densities.csv"))
+
+### Split by MPA ###
+
+grp.mpa <- data %>%
+  group_by_all() %>%
+  mutate(newnames=paste0(MPA_Group))
+
+split.mpa <- split(grp.mpa, grp.mpa$newnames)
+for (I in 1:length(split.mpa)) {assign(unique(split.mpa[[I]]$newnames), split.mpa[[I]])}
+
+### Create function. For this, you will need the MPA data frame and the column # of the taxa you are exmaning ###
+
+depth_change <- function(df, column){
+  
+  parameter <- c(df[1,7], colnames(df[column]))
+  
+  plot(x = df$Survey_Year,
+       y = df$Ave_Depth..m.,
+       xlim = c(2005, 2016),
+       ylim = c(110, 0),
+       main = paste0(parameter),
+       xlab = "Year",
+       ylab = "Depth (m)",
+       col = "grey",
+       pch = 15,
+       cex = 2)
+  
+  std <- function(x){
+    sd(x)/sqrt(length(x))
+  }
+  
+  a <- subset(df, df[,column] > 0)
+  a[is.na(a)] <- 0
+  
+  par(new=T)
+  plot(x = a$Survey_Year,
+       y = a$Ave_Depth..m.,
+       xlim = c(2005, 2016),
+       ylim = c(110, 0),
+       main = " ",
+       xlab = "Year",
+       ylab = "Depth (m)",
+       col = c(rgb(red = 1, green = 0, blue = 0, alpha = 0.5), rgb(red = 0, green = 0, blue = 1, alpha = 0.5)) [as.numeric(factor(a$Designation))],
+       pch = 16,
+       cex = 0.5*(a[[column]] / mean(a[[column]])))
+  legend("topright", col = c("red", "blue"), pch = 16, legend = c("MPA", "Reference"))
+  
+  grp.a <- a %>%
+    group_by_all() %>%
+    mutate(identity=paste0(Survey_Year))
+  
+  split.a <- split(grp.a, grp.a$identity)
+  for (I in 1:length(split.a)) {assign(unique(split.a[[I]]$identity), split.a[[I]])
+    if (unique(split.a[[I]]$identity) == 0) next
+  }
+  
+  means <- as.numeric(unlist(lapply(split.a, function(a){
+    c(mean(a$Ave_Depth..m.))
+  })))
+  
+  stds <- as.numeric(unlist(lapply(split.a, function(a){
+    c(std(a$Ave_Depth..m.))
+  })))
+  
+  years <- c(unique(a$Survey_Year))
+  
+  par(new=T)
+  plot(x = years,
+       y = means,
+       type = "p",
+       xlim = c(2005, 2016),
+       ylim = c(110, 0),
+       main = " ",
+       xlab = "Year",
+       ylab = "Depth (m)",
+       col = "black",
+       pch = 5)
+  arrows(x0=years, y0=means-stds, x1=years, y1=means+stds, code=3, angle=90, length=0.2, col="black")
+  
+  b <- subset(a, a$Designation == "MPA")
+  c <- subset(a, a$Designation == "Reference")
+  
+  grp.b <- b %>%
+    group_by_all() %>%
+    mutate(identity=paste0(Survey_Year))
+  
+  split.b <- split(grp.b, grp.b$identity)
+  for (I in 1:length(split.b)) {assign(unique(split.b[[I]]$identity), split.b[[I]])
+    if (unique(split.b[[I]]$identity) == 0) next
+  }
+  
+  means <- as.numeric(unlist(lapply(split.b, function(t){
+    c(mean(t$Ave_Depth..m.))
+  })))
+  
+  stds <- as.numeric(unlist(lapply(split.b, function(t){
+    c(std(t$Ave_Depth..m.))
+  })))
+  
+  years <- c(unique(b$Survey_Year))
+  
+  par(new=T)
+  plot(x = years,
+       y = means,
+       type = "p",
+       xlim = c(2005, 2016),
+       ylim = c(110, 0),
+       main = " ",
+       xlab = "Year",
+       ylab = "Depth (m)",
+       col = "red",
+       pch = 5)
+  arrows(x0=years, y0=means-stds, x1=years, y1=means+stds, code=3, angle=90, length=0.2, col="red")
+  
+  grp.c <- c %>%
+    group_by_all() %>%
+    mutate(identity=paste0(Survey_Year))
+  
+  split.c <- split(grp.c, grp.c$identity)
+  for (I in 1:length(split.c)) {assign(unique(split.c[[I]]$identity), split.c[[I]])}
+  
+  means2 <- as.numeric(unlist(lapply(split.c, function(t){
+    c(mean(t$Ave_Depth..m.))
+  })))
+  
+  stds2 <- as.numeric(unlist(lapply(split.c, function(t){
+    c(std(t$Ave_Depth..m.))
+  })))
+  
+  years2 <- c(unique(c$Survey_Year))
+  
+  par(new=T)
+  plot(x = years2,
+       y = means2,
+       type = "p",
+       xlim = c(2005, 2016),
+       ylim = c(110, 0),
+       main = " ",
+       xlab = "Year",
+       ylab = "Depth (m)",
+       col = "blue",
+       pch = 5)
+  arrows(x0=years2, y0=means2-stds2, x1=years2, y1=means2+stds2, code=3, angle=90, length=0.2, col="blue")
+
+}
+
+### Test ###
+
+depth_change(`Gull Island`, 186)
+
+
+### Regional ###
+
+### Subset by region ###
+
+southern <- subset(data, Region == "South" | Region == "Channel Islands")
+middle <- subset(data, Region == "North Central" | Region == "Central")
+northern <- subset(data, Region == "North")
+channel <- subset(data, Region == "Channel Islands")
+channel_no_ana <- subset(channel, MPA_Group != "Anacapa Island")
+
+### Create function ###
+
+depth_change_region <- function(df, column){
+  
+  parameter <- c(df[1,3], colnames(df[column]))
+  
+  plot(x = df$Survey_Year,
+       y = df$Ave_Depth..m.,
+       xlim = c(2005, 2016),
+       ylim = c(110, 0),
+       main = paste0(parameter),
+       xlab = "Year",
+       ylab = "Depth (m)",
+       col = "grey",
+       pch = 15,
+       cex = 2)
+  
+  a <- subset(df, df[,column] > 0)
+  a[is.na(a)] <- 0
+  
+  par(new=T)
+  plot(x = a$Survey_Year,
+       y = a$Ave_Depth..m.,
+       xlim = c(2005, 2016),
+       ylim = c(110, 0),
+       main = " ",
+       xlab = "Year",
+       ylab = "Depth (m)",
+       col = c(rgb(red = 1, green = 0, blue = 0, alpha = 0.5), rgb(red = 0, green = 0, blue = 1, alpha = 0.5)) [as.numeric(factor(a$Designation))],
+       pch = 16,
+       cex = 0.1*(a[[column]] / mean(a[[column]])))
+  legend("topright", col = c("red", "blue"), pch = 16, legend = c("MPA", "Reference"))
+  
+  std <- function(x){
+    sd(x)/sqrt(length(x))
+  }
+  
+  grp.a <- a %>%
+    group_by_all() %>%
+    mutate(identity=paste0(Survey_Year))
+  
+  split.a <- split(grp.a, grp.a$identity)
+  for (I in 1:length(split.a)) {assign(unique(split.a[[I]]$identity), split.a[[I]])
+    if (unique(split.a[[I]]$identity) == 0) next
+  }
+  
+  means <- as.numeric(unlist(lapply(split.a, function(a){
+    c(mean(a$Ave_Depth..m.))
+  })))
+  
+  stds <- as.numeric(unlist(lapply(split.a, function(a){
+    c(std(a$Ave_Depth..m.))
+  })))
+  
+  years <- c(unique(a$Survey_Year))
+  
+  par(new=T)
+  plot(x = years,
+       y = means,
+       type = "p",
+       xlim = c(2005, 2016),
+       ylim = c(110, 0),
+       main = " ",
+       xlab = "Year",
+       ylab = "Depth (m)",
+       col = "black",
+       pch = 5)
+  arrows(x0=years, y0=means-stds, x1=years, y1=means+stds, code=3, angle=90, length=0.2, col="black")
+
+  b <- subset(a, a$Designation == "MPA")
+  c <- subset(a, a$Designation == "Reference")
+  
+  grp.b <- b %>%
+    group_by_all() %>%
+    mutate(identity=paste0(Survey_Year))
+  
+  split.b <- split(grp.b, grp.b$identity)
+  for (I in 1:length(split.b)) {assign(unique(split.b[[I]]$identity), split.b[[I]])
+    if (unique(split.b[[I]]$identity) == 0) next
+  }
+  
+  means <- as.numeric(unlist(lapply(split.b, function(t){
+    c(mean(t$Ave_Depth..m.))
+  })))
+  
+  stds <- as.numeric(unlist(lapply(split.b, function(t){
+    c(std(t$Ave_Depth..m.))
+  })))
+  
+  years <- c(unique(b$Survey_Year))
+  
+  par(new=T)
+  plot(x = years,
+       y = means,
+       type = "p",
+       xlim = c(2005, 2016),
+       ylim = c(110, 0),
+       main = " ",
+       xlab = "Year",
+       ylab = "Depth (m)",
+       col = "red",
+       pch = 5)
+  arrows(x0=years, y0=means-stds, x1=years, y1=means+stds, code=3, angle=90, length=0.2, col="red")
+  
+  grp.c <- c %>%
+    group_by_all() %>%
+    mutate(identity=paste0(Survey_Year))
+  
+  split.c <- split(grp.c, grp.c$identity)
+  for (I in 1:length(split.c)) {assign(unique(split.c[[I]]$identity), split.c[[I]])}
+  
+  means2 <- as.numeric(unlist(lapply(split.c, function(t){
+    c(mean(t$Ave_Depth..m.))
+  })))
+  
+  stds2 <- as.numeric(unlist(lapply(split.c, function(t){
+    c(std(t$Ave_Depth..m.))
+  })))
+  
+  years2 <- c(unique(c$Survey_Year))
+  
+  par(new=T)
+  plot(x = years2,
+       y = means2,
+       type = "p",
+       xlim = c(2005, 2016),
+       ylim = c(110, 0),
+       main = " ",
+       xlab = "Year",
+       ylab = "Depth (m)",
+       col = "blue",
+       pch = 5)
+  arrows(x0=years2, y0=means2-stds2, x1=years2, y1=means2+stds2, code=3, angle=90, length=0.2, col="blue")
+
+}
+
+### Test ###
+
+depth_change_region(northern, 186)
+
+```
+
