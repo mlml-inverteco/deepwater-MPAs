@@ -1,0 +1,344 @@
+---
+title: "Response_Ratio"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### This code uses Sydney's ggplot code for the response ratios to make response ratios across all years ###
+
+```{r}
+### Load packages ###
+library(ggplot2)
+library(ggpubr)
+library(tidyverse)
+library(plyr)
+library(dplyr)
+```
+### Load data and write function ###
+```{r}
+base_data <- data.frame(read.csv("Habitat_densities.csv"))
+
+response_ratio <- function(df, column, title, subtitle){
+  
+  MPAs <- subset(df, Designation == "MPA")
+  References <- subset(df, Designation == "Reference")
+  
+  logmean <- function(MPAs, References, column, year){
+    x <- subset(MPAs, Survey_Year == as.character(year))
+    y <- subset(References, Survey_Year == as.character(year))
+    log(mean(x[,column])/mean(y[,column]))
+  }
+  
+  std <- function(x){
+    sd(x)/sqrt(length(x))
+  }
+  
+  logerror <- function(MPAs, References, column, year){
+    x <- subset(MPAs, Survey_Year == as.character(year))
+    y <- subset(References, Survey_Year == as.character(year))
+    log(std(x[,column])/std(y[,column]))
+  }
+  
+  logmeans <- c(logmean(MPAs, References, column, 2005),
+                logmean(MPAs, References, column, 2006),
+                logmean(MPAs, References, column, 2007),
+                logmean(MPAs, References, column, 2008),
+                logmean(MPAs, References, column, 2009),
+                logmean(MPAs, References, column, 2011),
+                logmean(MPAs, References, column, 2012),
+                logmean(MPAs, References, column, 2014),
+                logmean(MPAs, References, column, 2015),
+                logmean(MPAs, References, column, 2016)) 
+  
+  logerrors <- c(logerror(MPAs, References, column, 2005),
+                 logerror(MPAs, References, column, 2006),
+                 logerror(MPAs, References, column, 2007),
+                 logerror(MPAs, References, column, 2008),
+                 logerror(MPAs, References, column, 2009),
+                 logerror(MPAs, References, column, 2011),
+                 logerror(MPAs, References, column, 2012),
+                 logerror(MPAs, References, column, 2014),
+                 logerror(MPAs, References, column, 2015),
+                 logerror(MPAs, References, column, 2016))
+  
+  Survey_Year <- c(2005, 2006, 2007, 2008, 2009, 2011, 2012, 2014, 2015, 2016)
+  
+  data <- data.frame(logmeans, logerrors, Survey_Year, title, subtitle)
+  
+  # ggplot(data, aes(x=Survey_Year, y=logmeans)) + 
+  #   geom_point(shape=21,size=3, alpha=0.5, position=position_dodge(0.9), fill="red")+
+  #   ylab('Response Ratio (Density)')+
+  #   xlab('Years')+ geom_hline(yintercept = 0, linetype="dashed")+
+  #   geom_errorbar(aes(ymax=logmeans+logerrors, ymin=logmeans-logerrors),
+  #                 position=position_dodge(0.9), width=0)+
+  #   # scale_y_continuous(breaks= pretty_breaks())+coord_flip()+
+  #   scale_y_continuous()+coord_flip()+
+  #   ggtitle(title, subtitle)+
+  #   theme(plot.title = element_text(size = 16, face = "bold"))
+}
+```
+##Start running datasets##
+To save the outputs of these functions as data that can be manipulated, plotted, and compared, run functions and save each one to a unique variable name.
+```{r}
+
+## Species ##
+
+Parastichopus_californicusRR <- response_ratio(base_data, 36, "Parastichopus californicus", " ") ## sea cucumber ##
+Stylaster_californicusRR <- response_ratio(base_data, 32, "Stylaster californicus", " ") ## hydrocoral ##
+Urticina_piscivoraRR <- response_ratio(base_data, 56, "Urticina piscivora", " ") ## Fish-eating anemone ##
+Tethya_aurantiaRR <- response_ratio(base_data, 79, "Tethya aurantia", " ") ## Puffball sponge ##
+Mediaster_aequalisRR <- response_ratio(base_data, 95, "Mediaster aequalis", " ") ## Red sea star ##
+Mesocentrotus_franciscanaRR <- response_ratio(base_data, 96, "Mesocentrotus franciscana", " ") ## Red sea urchin ##
+Pycnopodia_helianthoidesRR <- response_ratio(base_data, 121, "Pycnopodia helianthoides", " ") ## Sunflower star ##
+Stylatula_elongataRR <- response_ratio(base_data, 173, "Stylatula elongata", " ") ## White sea pen ##
+
+## Functional Groups ##
+
+response_ratio(base_data, 179, "Actiniaria", " ") ## Anemones ##
+response_ratio(base_data, 180, "Alcyonacea", " ") ## Soft corals ##
+AsteroideaRR <- response_ratio(base_data, 181, "Asteroidea", " ") ## Sea stars ##
+response_ratio(base_data, 182, "Echinoidea", " ") ## Sea urchins ##
+response_ratio(base_data, 183, "Holothuroidea", " ") ## Sea cucumbers ##
+response_ratio(base_data, 184, "Malacostraca", " ") ## Crabs and allies ##
+response_ratio(base_data, 185, "Pennatulacea", " ") ## Sea pens ##
+response_ratio(base_data, 186, "Porifera", " ") ## Sponges ##
+
+### Now to take these groups and break it down by substrate ###
+
+Hard <- subset(base_data, Habitat_Type == "Hard")
+Hard_Mixed <- subset(base_data, Habitat_Type == "Hard_Mixed")
+Soft <- subset(base_data, Habitat_Type == "Soft")
+Soft_Mixed <- subset(base_data, Habitat_Type == "Soft_Mixed")
+
+### Hard ###
+
+## Species ##
+
+response_ratio(Hard, 36, "Parastichopus californicus", "Hard substrate") ## sea cucumber ##
+response_ratio(Hard, 32, "Stylaster californicus", "Hard substrate") ## hydrocoral ##
+response_ratio(Hard, 56, "Urticina piscivora", "Hard substrate") ## Fish-eating anemone ##
+response_ratio(Hard, 79, "Tethya aurantia", "Hard substrate") ## Puffball sponge ##
+response_ratio(Hard, 95, "Mediaster aequalis", "Hard substrate") ## Red sea star ##
+response_ratio(Hard, 96, "Mesocentrotus franciscanus", "Hard substrate") ## Red sea urchin ##
+response_ratio(Hard, 121, "Pycnopodia helianthoides", "Hard substrate") ## Sunflower star ##
+response_ratio(Hard, 173, "Stylatula elongata", "Hard substrate") ## White sea pen ##
+
+## Functional Groups ##
+
+response_ratio(Hard, 179, "Actiniaria", "Hard substrate") ## Anemones ##
+response_ratio(Hard, 180, "Alcyonacea", "Hard substrate") ## Soft corals ##
+response_ratio(Hard, 181, "Asteroidea", "Hard substrate") ## Sea stars ##
+response_ratio(Hard, 182, "Echinoidea", "Hard substrate") ## Sea urchins ##
+response_ratio(Hard, 183, "Holothuroidea", "Hard substrate") ## Sea cucumbers ##
+response_ratio(Hard, 184, "Malacostraca", "Hard substrate") ## Crabs and allies ##
+response_ratio(Hard, 185, "Pennatulacea", "Hard substrate") ## Sea pens ##
+response_ratio(Hard, 186, "Porifera", "Hard substrate") ## Sponges ##
+
+### Hard Mixed ###
+
+## Species ##
+
+response_ratio(Hard_Mixed, 36, "Parastichopus californicus", "Hard Mixed substrate") ## sea cucumber ##
+response_ratio(Hard_Mixed, 32, "Stylaster californicus", "Hard Mixed substrate") ## hydrocoral ##
+response_ratio(Hard_Mixed, 56, "Urticina piscivora", "Hard Mixed substrate") ## Fish-eating anemone ##
+response_ratio(Hard_Mixed, 79, "Tethya aurantia", "Hard Mixed substrate") ## Puffball sponge ##
+response_ratio(Hard_Mixed, 95, "Mediaster aequalis", "Hard Mixed substrate") ## Red sea star ##
+response_ratio(Hard_Mixed, 96, "Mesocentrotus franciscanus", "Hard Mixed substrate") ## Red sea urchin ##
+response_ratio(Hard_Mixed, 121, "Pycnopodia helianthoides", "Hard Mixed substrate") ## Sunflower star ##
+response_ratio(Hard_Mixed, 173, "Stylatula elongata", "Hard Mixed substrate") ## White sea pen ##
+
+## Functional Groups ##
+
+response_ratio(Hard_Mixed, 179, "Actiniaria", "Hard Mixed substrate") ## Anemones ##
+response_ratio(Hard_Mixed, 180, "Alcyonacea", "Hard Mixed substrate") ## Soft corals ##
+response_ratio(Hard_Mixed, 181, "Asteroidea", "Hard Mixed substrate") ## Sea stars ##
+response_ratio(Hard_Mixed, 182, "Echinoidea", "Hard Mixed substrate") ## Sea urchins ##
+response_ratio(Hard_Mixed, 183, "Holothuroidea", "Hard Mixed substrate") ## Sea cucumbers ##
+response_ratio(Hard_Mixed, 184, "Malacostraca", "Hard Mixed substrate") ## Crabs and allies ##
+response_ratio(Hard_Mixed, 185, "Pennatulacea", "Hard Mixed substrate") ## Sea pens ##
+response_ratio(Hard_Mixed, 186, "Porifera", "Hard Mixed substrate") ## Sponges ##
+
+### Soft ###
+
+## Species ##
+
+response_ratio(Soft, 36, "Parastichopus californicus", "Soft substrate") ## sea cucumber ##
+response_ratio(Soft, 32, "Stylaster californicus", "Soft substrate") ## hydrocoral ##
+response_ratio(Soft, 56, "Urticina piscivora", "Soft substrate") ## Fish-eating anemone ##
+response_ratio(Soft, 79, "Tethya aurantia", "Soft substrate") ## Puffball sponge ##
+response_ratio(Soft, 95, "Mediaster aequalis", "Soft substrate") ## Red sea star ##
+response_ratio(Soft, 96, "Mesocentrotus franciscanus", "Soft substrate") ## Red sea urchin ##
+response_ratio(Soft, 121, "Pycnopodia helianthoides", "Soft substrate") ## Sunflower star ##
+response_ratio(Soft, 173, "Stylatula elongata", "Soft substrate") ## White sea pen ##
+
+## Functional Groups ##
+
+response_ratio(Soft, 179, "Actiniaria", "Soft substrate") ## Anemones ##
+response_ratio(Soft, 180, "Alcyonacea", "Soft substrate") ## Soft corals ##
+response_ratio(Soft, 181, "Asteroidea", "Soft substrate") ## Sea stars ##
+response_ratio(Soft, 182, "Echinoidea", "Soft substrate") ## Sea urchins ##
+response_ratio(Soft, 183, "Holothuroidea", "Soft substrate") ## Sea cucumbers ##
+response_ratio(Soft, 184, "Malacostraca", "Soft substrate") ## Crabs and allies ##
+response_ratio(Soft, 185, "Pennatulacea", "Soft substrate") ## Sea pens ##
+response_ratio(Soft, 186, "Porifera", "Soft substrate") ## Sponges ##
+
+### Soft Mixed ###
+
+## Species ##
+
+response_ratio(Soft_Mixed, 36, "Parastichopus californicus", "Soft Mixed substrate") ## sea cucumber ##
+response_ratio(Soft_Mixed, 32, "Stylaster californicus", "Soft Mixed substrate") ## hydrocoral ##
+response_ratio(Soft_Mixed, 56, "Urticina piscivora", "Soft Mixed substrate") ## Fish-eating anemone ##
+response_ratio(Soft_Mixed, 79, "Tethya aurantia", "Soft Mixed substrate") ## Puffball sponge ##
+response_ratio(Soft_Mixed, 95, "Mediaster aequalis", "Soft Mixed substrate") ## Red sea star ##
+response_ratio(Soft_Mixed, 96, "Mesocentrotus franciscanus", "Soft Mixed substrate") ## Red sea urchin ##
+response_ratio(Soft_Mixed, 121, "Pycnopodia helianthoides", "Soft Mixed substrate") ## Sunflower star ##
+response_ratio(Soft_Mixed, 173, "Stylatula elongata", "Soft Mixed substrate") ## White sea pen ##
+
+## Functional Groups ##
+
+response_ratio(Soft_Mixed, 179, "Actiniaria", "Soft Mixed substrate") ## Anemones ##
+response_ratio(Soft_Mixed, 180, "Alcyonacea", "Soft Mixed substrate") ## Soft corals ##
+response_ratio(Soft_Mixed, 181, "Asteroidea", "Soft Mixed substrate") ## Sea stars ##
+response_ratio(Soft_Mixed, 182, "Echinoidea", "Soft Mixed substrate") ## Sea urchins ##
+response_ratio(Soft_Mixed, 183, "Holothuroidea", "Soft Mixed substrate") ## Sea cucumbers ##
+response_ratio(Soft_Mixed, 184, "Malacostraca", "Soft Mixed substrate") ## Crabs and allies ##
+response_ratio(Soft_Mixed, 185, "Pennatulacea", "Soft Mixed substrate") ## Sea pens ##
+response_ratio(Soft_Mixed, 186, "Porifera", "Soft Mixed substrate") ## Sponges ##
+
+### Regional Breakdown ###
+
+North <- subset(base_data, Region == "North")
+Central <- subset(base_data, Region == "North Central" | Region == "Central")
+South <- subset(base_data, Region == "South" | Region == "Channel Islands")
+Channel.Islands <- subset(base_data, Region == "Channel Islands")
+
+### North ###
+
+## Species ##
+
+response_ratio(North, 36, "Parastichopus californicus", "North") ## sea cucumber ##
+response_ratio(North, 32, "Stylaster californicus", "North") ## hydrocoral ##
+response_ratio(North, 56, "Urticina piscivora", "North") ## Fish-eating anemone ##
+response_ratio(North, 79, "Tethya aurantia", "North") ## Puffball sponge ##
+response_ratio(North, 95, "Mediaster aeaqulis", "North") ## Red sea star ##
+response_ratio(North, 96, "Mesocentrotus franciscanus", "North") ## Red sea urchin ##
+response_ratio(North, 121, "Pycnopodia helianthoides", "North") ## Sunflower star ##
+response_ratio(North, 173, "Stylatula elongata", "North") ## White sea pen ##
+
+## Functional Groups ##
+
+response_ratio(North, 179, "Actiniaria", "North") ## Anemones ##
+response_ratio(North, 180, "Alcyonacea", "North") ## Soft corals ##
+response_ratio(North, 181, "Asteroidea", "North") ## Sea stars ##
+response_ratio(North, 182, "Echinoidea", "North") ## Sea urchins ##
+response_ratio(North, 183, "Holothuroidea", "North") ## Sea cucumbers ##
+response_ratio(North, 184, "Malacostraca", "North") ## Crabs and allies ##
+response_ratio(North, 185, "Pennatulacea", "North") ## Sea pens ##
+response_ratio(North, 186, "Porifera", "North") ## Sponges ##
+
+### Central ###
+
+## Species ##
+
+response_ratio(Central, 36, "Parastichopus californicus", "Central") ## sea cucumber ##
+response_ratio(Central, 32, "Stylaster californicus", "Central") ## hydrocoral ##
+response_ratio(Central, 56, "Urticina piscivora", "Central") ## Fish-eating anemone ##
+response_ratio(Central, 79, "Tethya aurantia", "Central") ## Puffball sponge ##
+response_ratio(Central, 95, "Mediaster aequalis", "Central") ## Red sea star ##
+response_ratio(Central, 96, "Mesocentrotus franciscanus", "Central") ## Red sea urchin ##
+response_ratio(Central, 121, "Pycnopodia helianthoides", "Central") ## Sunflower star ##
+response_ratio(Central, 173, "Stylatula elongata", "Central") ## White sea pen ##
+
+## Functional Groups ##
+
+response_ratio(Central, 179, "Actiniaria", "Central") ## Anemones ##
+response_ratio(Central, 180, "Alcyonacea", "Central") ## Soft corals ##
+response_ratio(Central, 181, "Asteroidea", "Central") ## Sea stars ##
+response_ratio(Central, 182, "Echinoidea", "Central") ## Sea urchins ##
+response_ratio(Central, 183, "Holothuroidea", "Central") ## Sea cucumbers ##
+response_ratio(Central, 184, "Malacostraca", "Central") ## Crabs and allies ##
+response_ratio(Central, 185, "Pennatulacea", "Central") ## Sea pens ##
+response_ratio(Central, 186, "Porifera", "Central") ## Sponges ##
+
+### South ###
+
+## Species ##
+
+response_ratio(South, 36, "Parastichopus californicus", "South") ## sea cucumber ##
+response_ratio(South, 32, "Stylaster californicus", "South") ## hydrocoral ##
+response_ratio(South, 56, "Urticina piscivora", "South") ## Fish-eating anemone ##
+response_ratio(South, 79, "Tethya aurantia", "South") ## Puffball sponge ##
+response_ratio(South, 95, "Mediaster aequalis", "South") ## Red sea star ##
+response_ratio(South, 96, "Mesocentrotus franciscanus", "South") ## Red sea urchin ##
+response_ratio(South, 121, "Pycnopodia helianthoides", "South") ## Sunflower star ##
+response_ratio(South, 173, "Stylatula elongata", "South") ## White sea pen ##
+
+## Functional Groups ##
+
+response_ratio(South, 179, "Actiniaria", "South") ## Anemones ##
+response_ratio(South, 180, "Alcyonacea", "South") ## Soft corals ##
+response_ratio(South, 181, "Asteroidea", "South") ## Sea stars ##
+response_ratio(South, 182, "Echinoidea", "South") ## Sea urchins ##
+response_ratio(South, 183, "Holothuroidea", "South") ## Sea cucumbers ##
+response_ratio(South, 184, "Malacostraca", "South") ## Crabs and allies ##
+response_ratio(South, 185, "Pennatulacea", "South") ## Sea pens ##
+response_ratio(South, 186, "Porifera", "South") ## Sponges ##
+
+### Channel Islands ###
+
+## Species ##
+
+response_ratio(Channel.Islands, 36, "Parastichopus californicus", "Channel.Islands") ## sea cucumber ##
+response_ratio(Channel.Islands, 32, "Stylaster californicus", "Channel.Islands") ## hydrocoral ##
+response_ratio(Channel.Islands, 56, "Urticina piscivora", "Channel.Islands") ## Fish-eating anemone ##
+response_ratio(Channel.Islands, 79, "Tethya aurantia", "Channel.Islands") ## Puffball sponge ##
+response_ratio(Channel.Islands, 95, "Mediaster aeqaulis", "Channel.Islands") ## Red sea star ##
+response_ratio(Channel.Islands, 96, "Mesocentrotus franciscanus", "Channel.Islands") ## Red sea urchin ##
+response_ratio(Channel.Islands, 121, "Pycnopodia helianthoides", "Channel.Islands") ## Sunflower star ##
+response_ratio(Channel.Islands, 173, "Stylatula elongata", "Channel.Islands") ## White sea pen ##
+
+## Functional Groups ##
+
+response_ratio(Channel.Islands, 179, "Actiniaria", "Channel.Islands") ## Anemones ##
+response_ratio(Channel.Islands, 180, "Alcyonacea", "Channel.Islands") ## Soft corals ##
+response_ratio(Channel.Islands, 181, "Asteroidea", "Channel.Islands") ## Sea stars ##
+response_ratio(Channel.Islands, 182, "Echinoidea", "Channel.Islands") ## Sea urchins ##
+response_ratio(Channel.Islands, 183, "Holothuroidea", "Channel.Islands") ## Sea cucumbers ##
+response_ratio(Channel.Islands, 184, "Malacostraca", "Channel.Islands") ## Crabs and allies ##
+response_ratio(Channel.Islands, 185, "Pennatulacea", "Channel.Islands") ## Sea pens ##
+response_ratio(Channel.Islands, 186, "Porifera", "Channel.Islands") ## Sponges ##
+
+```
+##Plot comparisons
+These commands should be general for whatever comparisons you may wish to add to your plot. If you need to compare more than 2, then just add a variableC and add that to the variables list. What I am not sure about is how the naming conventions worked. Some of that might need additional modification. 
+```{r}
+#Inputs to enter
+variableA <- Mediaster_aequalisRR
+variableB <- AsteroideaRR
+
+variables <- bind_rows(variableA,variableB)
+
+plotRR <- ggplot(variables, aes(x=Survey_Year, y=logmeans, color=title)) + 
+  geom_point(size=4) +
+  geom_errorbar(aes(ymax=logmeans+logerrors, ymin=logmeans-logerrors),color="black",alpha=0.3,width=0.3) +
+  geom_line(aes(group = title),linetype="dashed") +
+  scale_color_brewer(palette="Set1",name="Group") +
+  ylab('Response Ratio (Density)') +
+  scale_x_continuous(name="Years",breaks = c(2005:2015),minor_breaks=NULL) +
+  # scale_color_discrete(name = "Group") +
+  geom_hline(yintercept = 0, linetype="dashed")+
+  theme_classic() +
+  theme(
+        legend.position = c(0.9,0.9)
+        )
+plotRR
+comparison_string <- str_c(unique(variables$title),collapse="_")
+filename <- str_c('Comparisons\\RR_',comparison_string,'.png')
+writeLines(filename)
+ggsave(filename)
+```
+
