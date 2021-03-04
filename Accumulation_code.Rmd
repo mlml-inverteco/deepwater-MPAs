@@ -5,30 +5,6 @@ date: "January 13, 2021"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-```
-
-## R Markdown
-
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
-
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
-
-```{r cars}
-summary(cars)
-```
-
-## Including Plots
-
-You can also embed plots, for example:
-
-```{r pressure, echo=FALSE}
-plot(pressure)
-```
-
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
-
 ```{r}
 ### Load packages ###
 
@@ -36,69 +12,18 @@ library(ggplot2)
 library(tidyverse)
 library(plyr)
 library(dplyr)
+library(cowplot)
+library(zoo)
 ```
 
 ```{r}
 ### Generate function ###
 
-## As of now, this function is designed to create a single species accumulation curve for 1 year for one MPA or reference site ##
-## This is now obsolete due to the 2.0 and 3.0 versions below ##
+### This function creates a cowplot with a species accumulation curve for MPA and Reference sites ###
+### for both average distance and number of transects. There is also a line graph displaying the difference in total species ###
+### between MPA and reference sites each year ###
 
-curve <- function(df){
-  
-  grp.line <- df %>%
-    group_by_all() %>%
-    mutate(newnames=paste0(Line))
-  
-  split.line <- split(grp.line, grp.line$newnames)
-  for (I in 1:length(split.line)) {assign(unique(split.line[[I]]$newnames), split.line[[I]])}
-  
-  reassemble <- lapply(split.line, function(x){
-    x[is.na(x)] <- -Inf
-    x <- mutate(x, cumulative_XY = cumsum(x$XY.dist))
-    x <- mutate(x, cumulative_species = cummax(as.numeric(factor(x$SpeciesName, levels = unique(x$SpeciesName))))-1)
-  })
-  rebound <- as.data.frame(bind_rows(reassemble))
-  
-  grp.species <- rebound %>%
-    group_by_all() %>%
-    mutate(newnames=paste0(cumulative_species))
-  
-  split.species <- split(grp.species, grp.species$newnames)
-  for (I in 1:length(split.species)) {assign(unique(split.species[[I]]$newnames), split.species[[I]])}
-  
-  take_average <- lapply(split.species, function(x){
-    x %>%
-      group_by(cumulative_species) %>%
-      summarise(average_XY = as.numeric(mean(cumulative_XY)),
-                cumulative_species = mean(cumulative_species))
-  })
-  
-  final <- as.data.frame(bind_rows(take_average))
-  final <- mutate(final, true_XY = as.numeric(average_XY))
-  final[,'true_XY']=round(final[,'true_XY'],1)
-  
-  ggplot(final, aes(x = average_XY, y = cumulative_species)) +
-    geom_point() +
-    stat_smooth(method = "lm", formula = y ~ x + I(x^2), size = 1)
-  
-}
-```
-
-```{r}
-### Example ###
-
-Anacapa <- data.frame(read.csv("Anacapa_Island_Observations_2005-2016.csv"))
-Anacapa_2005 <- subset(Anacapa, Year == "2005")
-curve(Anacapa_2005)
-```
-
-```{r}
-
-### This function creates a plot with a data spread and trendline for each year ###
-### The data frame to be used should be subset into either MPA or Reference designation prior ###
-
-curve2.0  <- function(df){
+accumulation  <- function(df){
   
   grp.line <- df %>%
     group_by_all() %>%
@@ -108,182 +33,381 @@ curve2.0  <- function(df){
   for (I in 1:length(split.line)) {assign(unique(split.line[[I]]$newnames), split.line[[I]])}
   
   reassemble <- lapply(split.line, function(x){
-    x[is.na(x)] <- -Inf
-    x <- mutate(x, cumulative_XY = cumsum(x$XY.dist))
-    x <- mutate(x, cumulative_species = cummax(as.numeric(factor(x$SpeciesName, levels = unique(x$SpeciesName))))-1)
+    x <- subset(x, Cumulative.Dist..m. != 0)
+    x <- subset(x, Unusable_Data != "X")
+    x <- x[complete.cases(x), ]
+    x <- mutate(x, cumulative_species = cummax(as.numeric(factor(x$SpeciesName, levels = unique(x$SpeciesName)))))
   })
+  
   rebound <- as.data.frame(bind_rows(reassemble))
   
-  grp.year <- rebound %>%
+  MPAs <- subset(rebound, Designation == "MPA")
+  References <- subset(rebound, Designation == "Reference")
+  
+  ## MPA ##
+  
+  MPA_parameter <- MPAs[1,8]
+  
+  MPAs$Year <- as.factor(MPAs$Year)
+  
+  MPAplot <- ggplot(MPAs, aes(x = Cumulative.Dist..m., y = cumulative_species, color=Year)) +
+    stat_smooth(method = "lm", formula = y ~ log(x), size = 1) +
+    stat_smooth(data = MPAs, aes(x = Cumulative.Dist..m., y = cumulative_species, color = "MPA"), 
+                method = "lm", formula = y ~ log(x), size = 3) +
+    scale_color_manual(values= c("#b22222", "#ff4500", "#ff8c00", "#ffd700", "#6b8e23", "#00ff7f",
+                                 "#40e0d0", "#1e90ff", "#6a5acd", "#9457eb", "#c71585", "#ff0000"),
+                       breaks = c("2005", "2006", "2007", "2008", "2009", "2011",
+                                  "2012", "2014", "2015", "2016", "2019", "MPA")) +
+    ggtitle(paste0(MPA_parameter), MPAs[1,6]) +
+    xlab("Average transect distance (m)") +
+    ylab("# of species") +
+    xlim(0, 500) +
+    ylim(0, 30)
+  
+  ## Reference ##
+  
+  ref_parameter <- References[1,8]
+  
+  References$Year <- as.factor(References$Year)
+  
+  Refplot <- ggplot(References, aes(x = Cumulative.Dist..m., y = cumulative_species, color=Year)) +
+    stat_smooth(method = "lm", formula = y ~ log(x), size = 1) +
+    stat_smooth(data = References, aes(x = Cumulative.Dist..m., y = cumulative_species, color = "Reference"), 
+                method = "lm", formula = y ~ log(x), size = 3) +
+    scale_color_manual(values= c("#b22222", "#ff4500", "#ff8c00", "#ffd700", "#6b8e23", "#00ff7f",
+                                 "#40e0d0", "#1e90ff", "#6a5acd", "#9457eb", "#c71585", "#0000ff"),
+                       breaks = c("2005", "2006", "2007", "2008", "2009", "2011",
+                                  "2012", "2014", "2015", "2016", "2019", "Reference")) +
+    ggtitle(paste0(ref_parameter), References[1,6]) +
+    xlab("Average transect distance (m)") +
+    ylab("# of species") +
+    xlim(0, 500) +
+    ylim(0, 30)
+  
+  grp.no. <- df %>%
     group_by_all() %>%
-    mutate(newnames=paste0(Year))
+    mutate(newnames=paste0(Year, Designation))
   
-  split.year <- split(grp.year, grp.year$newnames)
-  for (I in 1:length(split.year)) {assign(unique(split.year[[I]]$newnames), split.year[[I]])}
+  split.no. <- split(grp.no., grp.no.$newnames)
+  for (I in 1:length(split.no.)) {assign(unique(split.no.[[I]]$newnames), split.no.[[I]])}
   
-  year_by_year <- lapply(split.year, function(x){
-    
-    grp.species <- x %>%
-      group_by_all() %>%
-      mutate(newnames=paste0(cumulative_species))
-    
-    split.species <- split(grp.species, grp.species$newnames)
-    for (I in 1:length(split.species)) {assign(unique(split.species[[I]]$newnames), split.species[[I]])}
-    
-    std <- function(x){
-      sd(x)/sqrt(length(x))
-    }
-    
-    stds <- as.numeric(unlist(lapply(split.species, function(t){
-      c(std(t$cumulative_XY))
-    })))
-    
-    distance <- x$cumulative_XY
-    species <- x$cumulative_species
-    
-    plot(species~distance,
-         xlab="Average transect distance (m)",
-         ylab="# of species",
-         xlim=c(0, 200),
-         ylim=c(0, 30),
-         col = ifelse(x$Year == "2005", rgb(red = 255, green = 0, blue = 0, alpha = 15, maxColorValue=255),
-                      ifelse(x$Year == "2006", rgb(red = 255, green = 128, blue = 0, alpha = 15, maxColorValue=255),
-                             ifelse(x$Year == "2007", rgb(red = 255, green = 255, blue = 0, alpha = 15, maxColorValue=255),
-                                    ifelse(x$Year == "2008", rgb(red = 0, green = 255, blue = 0, alpha = 15, maxColorValue=255),
-                                           ifelse(x$Year == "2009", rgb(red = 0, green = 255, blue = 255, alpha = 15, maxColorValue=255),
-                                                  ifelse(x$Year == "2011", rgb(red = 0, green = 128, blue = 255, alpha = 15, maxColorValue=255),
-                                                         ifelse(x$Year == "2012", rgb(red = 0, green = 0, blue = 255, alpha = 15, maxColorValue=255),
-                                                                ifelse(x$Year == "2014", rgb(red = 127, green = 0, blue = 255, alpha = 15, maxColorValue=255),
-                                                                       ifelse(x$Year == "2015", rgb(red = 255, green = 0, blue = 255, alpha = 15, maxColorValue=255),
-                                                                              ifelse(x$Year == "2016", rgb(red = 255, green = 0, blue = 127, alpha = 15, maxColorValue=255), "black")))))))))))
-    
-    fit <- lm(species ~log(distance))
-    coef(fit)
-    
-    
-    
-    distance = seq(from=1,to=200,length.out=1000)
-    species = predict(fit,newdata=list(x=seq(from=1,to=200,length.out=1000)),
-                      interval="confidence")
-    matlines(distance, species,lwd=2,col = ifelse(x$Year == "2005", rgb(red = 255, green = 0, blue = 0, alpha = 255, maxColorValue=255),
-                                                  ifelse(x$Year == "2006", rgb(red = 255, green = 128, blue = 0, alpha = 255, maxColorValue=255),
-                                                         ifelse(x$Year == "2007", rgb(red = 255, green = 255, blue = 0, alpha = 255, maxColorValue=255),
-                                                                ifelse(x$Year == "2008", rgb(red = 0, green = 255, blue = 0, alpha = 255, maxColorValue=255),
-                                                                       ifelse(x$Year == "2009", rgb(red = 0, green = 255, blue = 255, alpha = 255, maxColorValue=255),
-                                                                              ifelse(x$Year == "2011", rgb(red = 0, green = 128, blue = 255, alpha = 255, maxColorValue=255),
-                                                                                     ifelse(x$Year == "2012", rgb(red = 0, green = 0, blue = 255, alpha = 255, maxColorValue=255),
-                                                                                            ifelse(x$Year == "2014", rgb(red = 127, green = 0, blue = 255, alpha = 255, maxColorValue=255),
-                                                                                                   ifelse(x$Year == "2015", rgb(red = 255, green = 0, blue = 255, alpha = 255, maxColorValue=255),
-                                                                                                          ifelse(x$Year == "2016", rgb(red = 255, green = 0, blue = 127, alpha = 255, maxColorValue=255), "black")))))))))))
-    legend("topleft",
-           legend=c("2005", "2006", "2007", "2008", "2009", "2011", "2012", "2014", "2015", "2016"),
-           col=c(rgb(red = 255, green = 0, blue = 0, alpha = 255, maxColorValue=255),
-                 rgb(red = 255, green = 128, blue = 0, alpha = 255, maxColorValue=255),
-                 rgb(red = 255, green = 255, blue = 0, alpha = 255, maxColorValue=255),
-                 rgb(red = 0, green = 255, blue = 0, alpha = 255, maxColorValue=255),
-                 rgb(red = 0, green = 255, blue = 255, alpha = 255, maxColorValue=255),
-                 rgb(red = 0, green = 128, blue = 255, alpha = 255, maxColorValue=255),
-                 rgb(red = 0, green = 0, blue = 255, alpha = 255, maxColorValue=255),
-                 rgb(red = 127, green = 0, blue = 255, alpha = 255, maxColorValue=255),
-                 rgb(red = 255, green = 0, blue = 255, alpha = 255, maxColorValue=255),
-                 rgb(red = 255, green = 0, blue = 127, alpha = 255, maxColorValue=255), "black"),
-           lwd=2)
-    
-    par(new=T)
-    
+  reassemble <- lapply(split.no., function(x){
+    x <- subset(x, Cumulative.Dist..m. != 0)
+    x <- subset(x, Unusable_Data != "X")
+    x <- x[complete.cases(x), ]
+    x <- mutate(x, cumulative_species = cummax(as.numeric(factor(x$SpeciesName, levels = unique(x$SpeciesName)))))
+    x <- mutate(x, transect_no. = cummax(as.numeric(factor(x$Line, levels = unique(x$Line)))))
   })
-
-}
-```
-
-```{r}
-### Examples ###
-
-Anacapa <- data.frame(read.csv("Anacapa_Island_Observations_2005-2016.csv"))
-curve2.0(Anacapa)
-
-```
-
-```{r}
-### This function is similar, but it divides the data into MPA and Reference sites, with a trendline for each ###
-
-curve3.0  <- function(df){
   
-  grp.line <- df %>%
-    group_by_all() %>%
-    mutate(newnames=paste0(Year, Line))
-  
-  split.line <- split(grp.line, grp.line$newnames)
-  for (I in 1:length(split.line)) {assign(unique(split.line[[I]]$newnames), split.line[[I]])}
-  
-  reassemble <- lapply(split.line, function(x){
-    x[is.na(x)] <- -Inf
-    x <- mutate(x, cumulative_XY = cumsum(x$XY.dist))
-    x <- mutate(x, cumulative_species = cummax(as.numeric(factor(x$SpeciesName, levels = unique(x$SpeciesName))))-1)
-  })
   rebound <- as.data.frame(bind_rows(reassemble))
   
-  grp.des <- rebound %>%
-    group_by_all() %>%
-    mutate(newnames=paste0(Designation))
+  MPAs <- subset(rebound, Designation == "MPA")
+  References <- subset(rebound, Designation == "Reference")
   
-  split.des <- split(grp.des, grp.des$newnames)
-  for (I in 1:length(split.des)) {assign(unique(split.des[[I]]$newnames), split.des[[I]])}
+  ## MPA ##
   
-  designation <- lapply(split.des, function(x){
-    
-    grp.species <- x %>%
-      group_by_all() %>%
-      mutate(newnames=paste0(cumulative_species))
-    
-    split.species <- split(grp.species, grp.species$newnames)
-    for (I in 1:length(split.species)) {assign(unique(split.species[[I]]$newnames), split.species[[I]])}
-    
-    std <- function(x){
-      sd(x)/sqrt(length(x))
+  MPA_parameter <- MPAs[1,8]
+  
+  MPAs$Year <- as.factor(MPAs$Year)
+  
+  MPAplot.no. <- ggplot(MPAs, aes(x = transect_no., y = cumulative_species, color=Year)) +
+    stat_smooth(method = "lm", formula = y ~ log(x), size = 1) +
+    stat_smooth(data = MPAs, aes(x = transect_no., y = cumulative_species, color = "MPA"), 
+                method = "lm", formula = y ~ log(x), size = 3) +
+    scale_color_manual(values= c("#b22222", "#ff4500", "#ff8c00", "#ffd700", "#6b8e23", "#00ff7f",
+                                 "#40e0d0", "#1e90ff", "#6a5acd", "#9457eb", "#c71585", "#ff0000"),
+                       breaks = c("2005", "2006", "2007", "2008", "2009", "2011",
+                                  "2012", "2014", "2015", "2016", "2019", "MPA")) +
+    ggtitle(paste0(MPA_parameter), MPAs[1,6]) +
+    xlab("No. of transects") +
+    ylab("# of species") +
+    xlim(0, 20) +
+    ylim(0, 60)
+  
+  ## Reference ##
+  
+  ref_parameter <- References[1,8]
+  
+  References$Year <- as.factor(References$Year)
+  
+  Refplot.no. <- ggplot(References, aes(x = transect_no., y = cumulative_species, color=Year)) +
+    stat_smooth(method = "lm", formula = y ~ log(x), size = 1) +
+    stat_smooth(data = References, aes(x = transect_no., y = cumulative_species, color = "Reference"), 
+                method = "lm", formula = y ~ log(x), size = 3) +
+    scale_color_manual(values= c("#b22222", "#ff4500", "#ff8c00", "#ffd700", "#6b8e23", "#00ff7f",
+                                 "#40e0d0", "#1e90ff", "#6a5acd", "#9457eb", "#c71585", "#0000ff"),
+                       breaks = c("2005", "2006", "2007", "2008", "2009", "2011",
+                                  "2012", "2014", "2015", "2016", "2019", "Reference")) +
+    ggtitle(paste0(ref_parameter), References[1,6]) +
+    xlab("No. of transects") +
+    ylab("# of species") +
+    xlim(0, 20) +
+    ylim(0, 60)
+  
+  a1 <- c(1, 10)
+  a2 <- rep(-20, 10)
+  dummy_data <- data.frame(transect_no. = a1, cumulative_species = a2)
+  
+  if ("2005" %in% MPAs$Year) {
+    y2005 <- subset(MPAs, Year == "2005")
+  } else {
+    y2005 <- dummy_data <- mutate(dummy_data, Year = 2005)
+  }
+  if ("2006" %in% MPAs$Year) {
+    y2006 <- subset(MPAs, Year == "2006")
+  } else {
+    y2006 <- dummy_data <- mutate(dummy_data, Year = 2006)
+  }
+  if ("2007" %in% MPAs$Year) {
+    y2007 <- subset(MPAs, Year == "2007")
+  } else {
+    y2007 <- dummy_data <- mutate(dummy_data, Year = 2007)
+  }
+  if ("2008" %in% MPAs$Year) {
+    y2008 <- subset(MPAs, Year == "2008")
+  } else {
+    y2008 <- dummy_data <- mutate(dummy_data, Year = 2008)
+  }
+  if ("2009" %in% MPAs$Year) {
+    y2009 <- subset(MPAs, Year == "2009")
+  } else {
+    y2009 <- dummy_data <- mutate(dummy_data, Year = 2009)
+  }
+  if ("2011" %in% MPAs$Year) {
+    y2011 <- subset(MPAs, Year == "2011")
+  } else {
+    y2011 <- dummy_data <- mutate(dummy_data, Year = 2011)
+  }
+  if ("2012" %in% MPAs$Year) {
+    y2012 <- subset(MPAs, Year == "2012")
+  } else {
+    y2012 <- dummy_data <- mutate(dummy_data, Year = 2012)
+  }
+  if ("2014" %in% MPAs$Year) {
+    y2014 <- subset(MPAs, Year == "2014")
+  } else {
+    y2014 <- dummy_data <- mutate(dummy_data, Year = 2014)
+  }
+  if ("2015" %in% MPAs$Year) {
+    y2015 <- subset(MPAs, Year == "2015")
+  } else {
+    y2015 <- dummy_data <- mutate(dummy_data, Year = 2015)
+  }
+  if ("2016" %in% MPAs$Year) {
+    y2016 <- subset(MPAs, Year == "2016")
+  } else {
+    y2016 <- dummy_data <- mutate(dummy_data, Year = 2016)
+  }
+  if ("2019" %in% MPAs$Year) {
+    y2019 <- subset(MPAs, Year == "2019")
+  } else {
+    y2019 <- dummy_data <- mutate(dummy_data, Year = 2019)
+  }
+  if ("2005" %in% References$Year) {
+    x2005 <- subset(References, Year == "2005")
+  } else {
+    x2005 <- dummy_data <- mutate(dummy_data, Year = 2005)
+  }
+  if ("2006" %in% References$Year) {
+    x2006 <- subset(References, Year == "2006")
+  } else {
+    x2006 <- dummy_data <- mutate(dummy_data, Year = 2006)
+  }
+  if ("2007" %in% References$Year) {
+    x2007 <- subset(References, Year == "2007")
+  } else {
+    x2007 <- dummy_data <- mutate(dummy_data, Year = 2007)
+  }
+  if ("2008" %in% References$Year) {
+    x2008 <- subset(References, Year == "2008")
+  } else {
+    x2008 <- dummy_data <- mutate(dummy_data, Year = 2008)
+  }
+  if ("2009" %in% References$Year) {
+    x2009 <- subset(References, Year == "2009")
+  } else {
+    x2009 <- dummy_data <- mutate(dummy_data, Year = 2009)
+  }
+  if ("2011" %in% References$Year) {
+    x2011 <- subset(References, Year == "2011")
+  } else {
+    x2011 <- dummy_data <- mutate(dummy_data, Year = 2011)
+  }
+  if ("2012" %in% References$Year) {
+    x2012 <- subset(References, Year == "2012")
+  } else {
+    x2012 <- dummy_data <- mutate(dummy_data, Year = 2012)
+  }
+  if ("2014" %in% References$Year) {
+    x2014 <- subset(References, Year == "2014")
+  } else {
+    x2014 <- dummy_data <- mutate(dummy_data, Year = 2014)
+  }
+  if ("2015" %in% References$Year) {
+    x2015 <- subset(References, Year == "2015")
+  } else {
+    x2015 <- dummy_data <- mutate(dummy_data, Year = 2015)
+  }
+  if ("2016" %in% References$Year) {
+    x2016 <- subset(References, Year == "2016")
+  } else {
+    x2016 <- dummy_data <- mutate(dummy_data, Year = 2016)
+  }
+  if ("2019" %in% References$Year) {
+    x2019 <- subset(References, Year == "2019")
+  } else {
+    x2019 <- dummy_data <- mutate(dummy_data, Year = 2019)
+  }
+  
+  Difference <- c((max(y2005$cumulative_species)-max(x2005$cumulative_species)),
+                  (max(y2006$cumulative_species)-max(x2006$cumulative_species)),
+                  (max(y2007$cumulative_species)-max(x2007$cumulative_species)),
+                  (max(y2008$cumulative_species)-max(x2008$cumulative_species)),
+                  (max(y2009$cumulative_species)-max(x2009$cumulative_species)),
+                  (max(y2011$cumulative_species)-max(x2011$cumulative_species)),
+                  (max(y2012$cumulative_species)-max(x2012$cumulative_species)),
+                  (max(y2014$cumulative_species)-max(x2014$cumulative_species)),
+                  (max(y2015$cumulative_species)-max(x2015$cumulative_species)),
+                  (max(y2016$cumulative_species)-max(x2016$cumulative_species)),
+                  (max(y2019$cumulative_species)-max(x2019$cumulative_species)))
+  
+  Different_year <- data.frame(Difference, Year <- c(2005, 2006, 2007, 2008, 2009, 2011, 2012, 2014, 2015, 2016, 2019))
+  
+  Diff <- ggplot(Different_year, aes(x = Year, y = Difference)) +
+    geom_line(size = 2, color = "black") +
+    geom_point(size = 4, color = "red") +
+    ylim(-20, 20) +
+    ggtitle("Difference in no. of taxa between MPA and Reference site", References[1,6]) +
+    ylab("Total no. of taxa (MPA - Reference)")
+  
+  MPA_model <- lm(cumulative_species~log(transect_no.),data=MPAs)
+  Ref_model <- lm(cumulative_species~log(transect_no.),data=References)
+  
+  X1 <- data.frame(transect_no.=seq(1.0,length=30)) # make an ordered sequence
+  Y1 <- predict(MPA_model,newdata=X1) # calculate predictions for that sequence
+  
+  X2 <- data.frame(transect_no.=seq(1.0,length=30))
+  Y2 <- predict(Ref_model,newdata=X2)
+  
+  dY1 <- diff(Y1)/diff(X1$transect_no.)  # the derivative of your function
+  dX1 <- rowMeans(embed(X1$transect_no.,2)) # centers the X values for plotting
+  
+  dY2 <- diff(Y2)/diff(X2$transect_no.)
+  dX2 <- rowMeans(embed(X2$transect_no.,2))
+  
+  datum1 <- data.frame(dX1, dY1)
+  datum2 <- data.frame(dX2, dY2)
+  
+  Derivatives <- ggplot(data = datum1, mapping = aes(x = dX1, y = dY1, color = "MPA")) + 
+    geom_line() + 
+    geom_line(data = datum2, mapping = aes(x = dX2, y = dY2, color = "Reference")) +
+    xlab("Difference in no. of transects") +
+    ylab("Difference in no. of species") +
+    ggtitle("Derivatives", References[1,6])
+  
+  Int <- function(MPA, Ref){
+    Mmodel <- lm(cumulative_species~log(transect_no.),data=MPA)
+    Rmodel <- lm(cumulative_species~log(transect_no.),data=Ref)
+    x1 <- data.frame(transect_no.=seq(1.0,length=30))
+    y1 <- predict(Mmodel,newdata=x1)
+    x2 <- data.frame(transect_no.=seq(1.0,length=30))
+    y2 <- predict(Rmodel,newdata=x2)
+    dx1 <- rowMeans(embed(x1$transect_no.,2))
+    dy1 <- diff(y1)/diff(x1$transect_no.)
+    dx2 <- rowMeans(embed(x2$transect_no.,2))
+    dy2 <- diff(y2)/diff(x2$transect_no.)
+    exponent <- function(a, pow) (abs(a)^pow)*sign(a)
+    x <- dx1
+    y <- dy1
+    d <- data.frame(x,y)
+    expEstimate1 <- lm(y~exponent(x,-1),data=d)
+    ymxb1 <- coef(expEstimate1)
+    new.func1 <- function(x) {
+      exponent(x, -1)*ymxb1[2]+ymxb1[1]
     }
-    
-    stds <- as.numeric(unlist(lapply(split.species, function(t){
-      c(std(t$cumulative_XY))
-    })))
-    
-    distance <- x$cumulative_XY
-    species <- x$cumulative_species
-    
-    plot(species~distance,
-         xlab="Average transect distance (m)",
-         ylab="# of species",
-         xlim=c(0, 200),
-         ylim=c(0, 30),
-         col = ifelse(x$Designation == "MPA", rgb(red = 255, green = 0, blue = 0, alpha = 15, maxColorValue=255),
-                      ifelse(x$Designation == "Reference", rgb(red = 0, green = 0, blue = 255, alpha = 15, maxColorValue=255), "black")))
-    
-    fit <- lm(species ~log(distance))
-    coef(fit)
-    
-    distance = seq(from=1,to=200,length.out=1000)
-    species = predict(fit,newdata=list(x=seq(from=1,to=200,length.out=1000)),
-                      interval="confidence")
-    matlines(distance, species,lwd=2,col = ifelse(x$Designation == "MPA", rgb(red = 255, green = 0, blue = 0, alpha = 255, maxColorValue=255),
-                                                  ifelse(x$Designation == "Reference", rgb(red = 0, green = 0, blue = 255, alpha = 255, maxColorValue=255), "black")))
-                                                                                            
-    legend("topleft",
-           legend=c("MPA", "Reference"),
-           col=c(rgb(red = 255, green = 0, blue = 0, alpha = 255, maxColorValue=255),
-                 rgb(red = 0, green = 0, blue = 255, alpha = 255, maxColorValue=255), "black"),
-           lwd=2)
-    
-    par(new=T)
-    
-  })
+    integral.1 <- integrate(new.func1,1,30)$value
+    x <- dx2
+    y <- dy2
+    d <- data.frame(x,y)
+    expEstimate2 <- lm(y~exponent(x,-1),data=d)
+    ymxb2 <- coef(expEstimate2)
+    new.func2 <- function(x) {
+      exponent(x, -1)*ymxb2[2]+ymxb2[1]
+    }
+    integral.2 <- integrate(new.func2,1,30)$value
+    final.dif <- integral.1 - integral.2
+    print(final.dif)
+  }
+  
+  Ints <- c(Int(y2005,x2005), Int(y2006,x2006), Int(y2007,x2007), Int(y2008,x2008),
+            Int(y2009,x2009), Int(y2011,x2011), Int(y2012,x2012), Int(y2014,x2014),
+            Int(y2015,x2015), Int(y2016,x2016), Int(y2019,x2019))
+  
+  New.data <- data.frame(Ints, Years = c(2005, 2006, 2007, 2008, 2009, 2011, 2012, 2014, 2015, 2016, 2019))
+  New.data[New.data == 0] <- NA
+  
+  Integrals <- ggplot(New.data, aes(x = Year, y = Ints)) +
+    geom_line(size = 2, color = "black") +
+    geom_point(size = 4, color = "red") +
+    ggtitle("Difference between Integrals of MPA and References", References[1,6]) +
+    ylab("Difference between Integrals (MPA-Reference)") +
+    ylim(-30, 30)
+  
+  plot_grid(MPAplot, Refplot, MPAplot.no., Refplot.no., Diff, Derivatives, Integrals)
   
 }
-```
 
-```{r}
-### Example ###
+## Load data ##
 
-Carrington <- data.frame(read.csv("Carrington_Point_Observations_2005-2016.csv"))
-curve3.0(Carrington)
+## NOTE Anacapa Island and Piedras Blancas are not included ##
+## They do not work with this code because they are MPA ONLY ##
+
+Ano <- data.frame(read.csv("Ano_Nuevo_Observations.csv"))
+Big <- data.frame(read.csv("Big_Creek_Observations.csv"))
+Bodega <- data.frame(read.csv("Bodega_Bay_Observations.csv"))
+Capus <- data.frame(read.csv("Capus_Point_Observations.csv"))
+Carrington <- data.frame(read.csv("Carrington_Point_Observations.csv"))
+Farallon <- data.frame(read.csv("Farallon_Islands_Observations.csv"))
+Farnsworth <- data.frame(read.csv("Farnsworth_Observations.csv"))
+Gull <- data.frame(read.csv("Gull_Island_Observations.csv"))
+Harris <- data.frame(read.csv("Harris_Point_Observations.csv"))
+Pillar <- data.frame(read.csv("Pillar_Point_Observations.csv"))
+Arena <- data.frame(read.csv("Point_Arena_Observations.csv"))
+Buchon <- data.frame(read.csv("Point_Buchon_Observations.csv"))
+Conception <- data.frame(read.csv("Point_Conception_Observations.csv"))
+Lobos <- data.frame(read.csv("Point_Lobos_Observations.csv"))
+George <- data.frame(read.csv("Point_St_George_Observations.csv"))
+Sur <- data.frame(read.csv("Point_Sur_Observations.csv"))
+Port <- data.frame(read.csv("Portuguese_Ledge_Observations.csv"))
+Rock <- data.frame(read.csv("Reading_Rock_Observations.csv"))
+Sea <- data.frame(read.csv("Sea_Lion_Gulch_Observations.csv"))
+Jolla <- data.frame(read.csv("South_La_Jolla_Observations.csv"))
+South <- data.frame(read.csv("South_Point_Observations.csv"))
+Swami <- data.frame(read.csv("Swamis_Observations.csv"))
+Ten <- data.frame(read.csv("Ten_Mile_Observations.csv"))
+
+accumulation(Ano)
+accumulation(Big)
+accumulation(Bodega)
+accumulation(Capus)
+accumulation(Carrington)
+accumulation(Farallon)
+accumulation(Farnsworth)
+accumulation(Gull)
+accumulation(Harris)
+accumulation(Pillar)
+accumulation(Arena)
+accumulation(Buchon)
+accumulation(Conception)
+accumulation(Lobos)
+accumulation(George)
+accumulation(Sur)
+accumulation(Port)
+accumulation(Rock)
+accumulation(Sea)
+accumulation(Jolla)
+accumulation(South)
+accumulation(Swami)
+accumulation(Ten)
 ```
 
