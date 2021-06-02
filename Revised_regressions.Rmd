@@ -1,0 +1,843 @@
+---
+title: "Revised_scatterplots"
+author: "Jackson Hoeke"
+date: "5/18/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggpubr)
+library(ggplot2)
+library(vegan)
+library(plyr)
+library(dplyr)
+library(pwr2)
+library(sjstats)
+library(lme4)
+library(lmerTest)
+library(car)
+library(gridExtra)
+library(multcomp)
+setwd("C:/Users/Jackson/Desktop/Marine Bio/Deepwater_MPAs/Subprojects/Symbol_scatter/Revised_regressions")
+```
+
+# The goal of this revision is to reassess the regressions made between
+# Year, Diversity, Richness, and Latitude. There were several issues with the
+# regressions, including:
+
+# 1) MPAs were sampled in different locations in different years with irregular
+# intervals.
+
+# 2) Statistics were not recorded for the regressions.
+
+# 3) The plots were usually too cluttered to read easily
+
+# Regressions will be performed on groups in the same region, and which the
+# intervals between sampling are (roughly) equal
+
+# The data is from summed transects, which have been combined into a 
+# grand sum sheet to calculate diversity.
+
+# Groups will be:
+
+# Channel Islands: Carrington Point, Gull Island, Harris Point, South Point
+
+# Channel Islands with Anacapa: Same as above, but including Anacapa Island
+
+# Northern CA: Bodega Bay, Farallon Islands
+
+# Central CA: Pt. Buchon, Pt. Lobos, Pt. Sur
+
+# Other MPAs will not be used in the regression if they do not fit well, or
+# have less than 2 years of data collection, since they are more likely than 
+# not to skew the data. 
+
+# To start, average diversity over time for MPA and reference sites will be run
+```{r}
+
+# Import data
+
+data <- data.frame(read.csv("Avg.transects.csv"))
+
+# Add diversity metric
+
+data <- mutate(data, diversity = diversity(data[9:165]))
+
+# Add diversity average
+
+grp.mean <- data %>%
+  group_by_all() %>%
+  mutate(newnames=paste0(Year, MPA_Group, Type))
+
+split.mean <- split(grp.mean, grp.mean$newnames)
+for (I in 1:length(split.mean)) {assign(unique(split.mean[[I]]$newnames), 
+                                        split.mean[[I]])}
+
+mean.div <- lapply(split.mean, function(x){
+  
+  x <- mutate(x, avg.div=mean(x$diversity))
+  x <- mutate(x, div.sd=sd(x$diversity))
+  x <- mutate(x, div.SE=div.sd/length(x$diversity))
+  
+})
+
+div.avgs <- bind_rows(mean.div)
+
+# slim down data
+
+p1 <- div.avgs[1:8]
+p2 <- div.avgs[166:170]
+mod.avg <- cbind(p1,p2)
+mod.avg <- mod.avg[!duplicated(mod.avg[11]),]
+mod.avg <- as.data.frame(mod.avg)
+
+# Run linear regression, starting with the Channel Islands
+
+Channel <- subset(mod.avg, MPA_Group == "Carrington Point" | 
+                    MPA_Group == "Gull Island" | MPA_Group == "Harris Point" | 
+                    MPA_Group == "South Point")
+
+# Subset by designation
+
+Channel.mpa <- subset(Channel, Designation == "MPA")
+Channel.ref <- subset(Channel, Designation == "Reference")
+
+# Run MPA first
+
+channel.mpa.lm <- lm(formula = avg.div ~ Year, data = Channel.mpa)
+summary(channel.mpa.lm)
+
+# (Year: t = -1.225, p = 0.231)
+# (df = 1,26, F = 1.502, p = 0.2314)
+# (y~27.22048-01273(Year))
+# (R = 0.0546)
+
+# Check assumptions
+
+plot(residuals(channel.mpa.lm))
+shapiro.test(residuals(channel.mpa.lm))
+
+# Residuals normal
+
+# Run Ref
+
+channel.ref.lm <- lm(formula = avg.div ~ Year, data = Channel.ref)
+summary(channel.ref.lm)
+
+# (Year: t = 0.283, p = 0.779)
+# (df = 1,26, F = 0.0803, p = 0.7791)
+# (y~-6.268823+0.003932(Year))
+# (R = 0.003079)
+
+# Check assumptions
+
+plot(residuals(channel.ref.lm))
+shapiro.test(residuals(channel.ref.lm))
+
+# Residuals normal
+
+# Plot MPA and Ref regressions for channel islands
+
+ggplot() +
+  geom_point(data=Channel.ref,aes(x=Year,y=avg.div,colour=Designation,
+                                  shape=MPA_Group)) +
+  stat_smooth(data=Channel.ref,aes(x=Year,y=avg.div,colour=Designation),
+              method = lm, formula = y~x) +
+  geom_point(data=Channel.mpa,aes(x=Year,y=avg.div,colour=Designation,
+                                  shape=MPA_Group)) +
+  stat_smooth(data=Channel.mpa,aes(x=Year,y=avg.div,colour=Designation), 
+              method = lm, formula = y~x) +
+  scale_color_manual(values= c("#0000ff","#ff0000"),
+                     breaks = c("Reference","MPA")) +
+  ggtitle("Shannon diversity in the Channel Islands over time") +
+  xlab("Year") +
+  ylab("Shannon diversity") +
+  xlim(2005,2015)
+```
+
+# Run the channel islands with Anacapa Island
+```{r}
+
+# Create Channel Islands (+ Ancacapa) data
+
+Channel.a <- subset(mod.avg, MPA_Group == "Anacapa Island" | 
+                      MPA_Group == "Carrington Point" | 
+                      MPA_Group == "Gull Island" | MPA_Group == "Harris Point" | 
+                      MPA_Group == "South Point")
+Channel.a <- subset(Channel.a, Year == "2005" | Year == "2006" | 
+                      Year == "2007" | Year == "2008" | Year == "2009" | 
+                      Year == "2014" | Year == "2015")
+
+# Subset by designation
+
+Channel.a.mpa <- subset(Channel.a, Designation == "MPA")
+
+# Run model
+
+channel.a.mpa.lm <- lm(formula = avg.div ~ Year, data = Channel.a.mpa)
+summary(channel.a.mpa.lm)
+
+# (Year: t = -1.182, p = 0.244)
+# (df = 1,40, F = 1.397, p = 0.2442)
+# (y~21.863719-0.010094(Year))
+# (R = 0.03374)
+
+# Check assumptions
+
+plot(residuals(channel.a.mpa.lm))
+shapiro.test(residuals(channel.a.mpa.lm))
+
+# Residuals normal
+
+# Plot
+
+ggplot() +
+  geom_point(data=Channel.mpa,aes(x=Year,y=avg.div,colour=Designation,
+                                  shape=MPA_Group)) +
+  stat_smooth(data=Channel.mpa,aes(x=Year,y=avg.div,colour=Designation), 
+              method = lm, formula = y~x) +
+  scale_color_manual(values= c("#ff0000"),
+                     breaks = c("MPA")) +
+  ggtitle("Shannon diversity in the Channel Islands MPAs over time") +
+  xlab("Year") +
+  ylab("Shannon diversity") +
+  xlim(2005,2015)
+
+```
+
+# Run North CA
+```{r}
+
+# Create northern CA data 
+
+NCA <- subset(mod.avg, MPA_Group == "Bodega Bay" | 
+                MPA_Group == "Farallon Islands")
+
+# Subset by designation
+
+NCA.mpa <- subset(NCA, Designation == "MPA")
+NCA.ref <- subset(NCA, Designation == "Reference")
+
+# Run MPA first
+
+NCA.mpa.lm <- lm(formula = avg.div ~ Year, data = NCA.mpa)
+summary(NCA.mpa.lm)
+
+# (Year: t = -0.110, p = 0.914)
+# (df = 1,9, F = 0.0122, p = 0.9145)
+# (y~5.860638-0.002087(Year))
+# (R = 0.001354)
+
+# *** Significant ***
+
+# Test assumptions
+
+plot(residuals(NCA.mpa.lm))
+shapiro.test(residuals(NCA.mpa.lm))
+
+# Residuals normal
+
+# Run Ref
+
+NCA.ref.lm <- lm(formula = avg.div ~ Year, data = NCA.ref)
+summary(NCA.ref.lm)
+
+# (Year: t = -5.459, p = 0.00547)
+# (df = 1,4, F = 29.81, p = 0.005472)
+# (y~28.038268-0.013072(Year))
+# (R = 0.8817)
+
+# Test assumptions
+
+plot(residuals(NCA.ref.lm))
+shapiro.test(residuals(NCA.ref.lm))
+
+# Residuals normal
+
+# Plot MPA and Ref regressions for channel islands
+
+ggplot() +
+  geom_point(data=NCA.ref,aes(x=Year,y=avg.div,colour=Designation,
+                              shape=MPA_Group)) +
+  stat_smooth(data=NCA.ref,aes(x=Year,y=avg.div,colour=Designation),
+              method = lm, formula = y~x) +
+  geom_point(data=NCA.mpa,aes(x=Year,y=avg.div,colour=Designation,
+                              shape=MPA_Group)) +
+  stat_smooth(data=NCA.mpa,aes(x=Year,y=avg.div,colour=Designation), 
+              method = lm, formula = y~x) +
+  scale_color_manual(values= c("#0000ff","#ff0000"),
+                     breaks = c("Reference","MPA")) +
+  ggtitle("Shannon diversity in Northern CA over time") +
+  xlab("Year") +
+  ylab("Shannon diversity") +
+  xlim(2011,2019)
+
+```
+# Run Central CA
+```{r}
+
+# Create central CA data
+
+CCA <- subset(mod.avg, MPA_Group == "Point Buchon" | 
+                MPA_Group == "Point Lobos" | MPA_Group == "Point Sur")
+
+# Subset by designation
+
+CCA.mpa <- subset(CCA, Designation == "MPA")
+CCA.ref <- subset(CCA, Designation == "Reference")
+
+# Run MPA first
+
+CCA.mpa.lm <- lm(formula = avg.div ~ Year, data = CCA.mpa)
+summary(CCA.mpa.lm)
+
+# (Year: t = 1.284, p = 0.223)
+# (df = 1,12, F = 1.649, p = 0.2234)
+# (y~-19.439771+0.010569(Year))
+# (R = 0.1208)
+
+# Check assumptions
+
+plot(residuals(CCA.mpa.lm))
+shapiro.test(residuals(CCA.mpa.lm))
+
+# Residuals normal
+
+# Run Ref
+
+CCA.ref.lm <- lm(formula = avg.div ~ Year, data = CCA.ref)
+summary(CCA.ref.lm)
+
+# (Year: t = 0.961, p = 0.365)
+# (df = 1,8, F = 0.9229, p = 0.3648)
+# (y~-25.68876+0.01369(Year))
+# (R = 0.1034)
+
+# Check assumptions
+
+plot(residuals(CCA.ref.lm))
+shapiro.test(residuals(CCA.ref.lm))
+
+# Residuals normal
+
+# Plot MPA and Ref regressions for channel islands
+
+ggplot() +
+  geom_point(data=CCA.ref,aes(x=Year,y=avg.div,colour=Designation,
+                              shape=MPA_Group)) +
+  stat_smooth(data=CCA.ref,aes(x=Year,y=avg.div,colour=Designation),
+              method = lm, formula = y~x) +
+  geom_point(data=CCA.mpa,aes(x=Year,y=avg.div,colour=Designation,
+                              shape=MPA_Group)) +
+  stat_smooth(data=CCA.mpa,aes(x=Year,y=avg.div,colour=Designation), 
+              method = lm, formula = y~x) +
+  scale_color_manual(values= c("#0000ff","#ff0000"),
+                     breaks = c("Reference","MPA")) +
+  ggtitle("Shannon diversity in Central CA over time") +
+  xlab("Year") +
+  ylab("Shannon diversity") +
+  xlim(2007,2019)
+
+```
+## Run again, but using species richness instead of diversity
+```{r}
+
+# The following 4 data blocks repeat the above code, but using richness
+
+# Add richness metric
+
+data <- mutate(data, richness = rowSums(data[9:165]!=0))
+
+# Add richness average
+
+grp.mean <- data %>%
+  group_by_all() %>%
+  mutate(newnames=paste0(Year, MPA_Group, Type))
+
+split.mean <- split(grp.mean, grp.mean$newnames)
+for (I in 1:length(split.mean)) {assign(unique(split.mean[[I]]$newnames), 
+                                        split.mean[[I]])}
+
+mean.rich <- lapply(split.mean, function(x){
+  
+  x <- mutate(x, avg.rich=mean(x$richness))
+  x <- mutate(x, rich.sd=sd(x$richness))
+  x <- mutate(x, rich.SE=rich.sd/length(x$richness))
+  
+})
+
+rich.avgs <- bind_rows(mean.rich)
+p1 <- rich.avgs[1:8]
+p2 <- rich.avgs[167:171]
+mod.avg <- cbind(p1,p2)
+mod.avg <- mod.avg[!duplicated(mod.avg[11]),]
+mod.avg <- as.data.frame(mod.avg)
+
+# Run linear regression, starting with the Channel Islands
+
+Channel <- subset(mod.avg, MPA_Group == "Carrington Point" | 
+                    MPA_Group == "Gull Island" | MPA_Group == "Harris Point" | 
+                    MPA_Group == "South Point")
+
+# Subset by designation
+
+Channel.mpa <- subset(Channel, Designation == "MPA")
+Channel.ref <- subset(Channel, Designation == "Reference")
+
+# Run MPA first
+
+channel.mpa.lm <- lm(formula = avg.rich ~ Year, data = Channel.mpa)
+summary(channel.mpa.lm)
+
+# (Year: t = 0.334, p = 0.741)
+# (df = 1,23, F = 0.1119, p = 0.7407)
+# (y~-53.31948+0.03395(Year))
+# (R = 0.004284)
+
+# Check assumptions
+
+plot(residuals(channel.mpa.lm))
+shapiro.test(residuals(channel.mpa.lm))
+
+# Residuals normal
+
+# Run Ref
+
+channel.ref.lm <- lm(formula = avg.rich ~ Year, data = Channel.ref)
+summary(channel.ref.lm)
+
+# (Year: t = 1.005, p = 0.324)
+# (df = 1,24, F = 1.009, p = 0.3243)
+# (y~-201.4798+0.1071(Year))
+# (R = 0.03737)
+
+plot(residuals(channel.ref.lm))
+shapiro.test(residuals(channel.ref.lm))
+
+# Residuals normal
+
+# Plot MPA and Ref regressions for channel islands
+
+ggplot() +
+  geom_point(data=Channel.ref,aes(x=Year,y=avg.rich,colour=Designation,
+                                  shape=MPA_Group)) +
+  stat_smooth(data=Channel.ref,aes(x=Year,y=avg.rich,colour=Designation),
+              method = lm, formula = y~x) +
+  geom_point(data=Channel.mpa,aes(x=Year,y=avg.rich,colour=Designation,
+                                  shape=MPA_Group)) +
+  stat_smooth(data=Channel.mpa,aes(x=Year,y=avg.rich,colour=Designation), 
+              method = lm, formula = y~x) +
+  scale_color_manual(values= c("#0000ff","#ff0000"),
+                     breaks = c("Reference","MPA")) +
+  ggtitle("Species richness in the Channel Islands over time") +
+  xlab("Year") +
+  ylab("No. of species") +
+  xlim(2005,2015)
+```
+# Channel Islands, with Anacapa
+```{r}
+
+# Create channel islands (+ Anacapa) data
+Channel.a <- subset(mod.avg, MPA_Group == "Anacapa Island" | 
+                      MPA_Group == "Carrington Point" | 
+                      MPA_Group == "Gull Island" | MPA_Group == "Harris Point" | 
+                      MPA_Group == "South Point")
+Channel.a <- subset(Channel.a, Year == "2005" | Year == "2006" | 
+                      Year == "2007" | Year == "2008" | Year == "2009" | 
+                      Year == "2014" | Year == "2015")
+
+# Subset by designation
+
+Channel.a.mpa <- subset(Channel.a, Designation == "MPA")
+
+# Run model
+
+channel.a.mpa.lm <- lm(formula = avg.rich ~ Year, data = Channel.a.mpa)
+summary(channel.a.mpa.lm)
+
+# (Year: t = 1.241, p = 0.222)
+# (df = 1,40, F = 1.54, p = 0.2218)
+# (y~-235.7342-0.1242(Year))
+# (R = 0.03708)
+
+plot(residuals(channel.a.mpa.lm))
+shapiro.test(residuals(channel.a.mpa.lm))
+
+# Residuals normal
+# Plot
+
+ggplot() +
+  geom_point(data=Channel.a.mpa,aes(x=Year,y=avg.rich,colour=Designation,
+                                    shape=MPA_Group)) +
+  stat_smooth(data=Channel.a.mpa,aes(x=Year,y=avg.rich,colour=Designation), 
+              method = lm, formula = y~x) +
+  scale_color_manual(values= c("#ff0000"),
+                     breaks = c("MPA")) +
+  ggtitle("Species richness in the Channel Islands MPAs over time") +
+  xlab("Year") +
+  ylab("No. of species") +
+  xlim(2005,2015)
+```
+# Run North CA
+```{r}
+
+# Create northern CA data
+
+NCA <- subset(mod.avg, MPA_Group == "Bodega Bay" | 
+                MPA_Group == "Farallon Islands")
+
+# Subset by designation
+
+NCA.mpa <- subset(NCA, Designation == "MPA")
+NCA.ref <- subset(NCA, Designation == "Reference")
+
+# Run MPA first
+
+NCA.mpa.lm <- lm(formula = avg.rich ~ Year, data = NCA.mpa)
+summary(NCA.mpa.lm)
+
+# (Year: t = 5.486, p = 0.000387)
+# (df = 1,9, F = 30.09, p = 0.0003873)
+# (y~-2733.8755+1.3652(Year))
+# (R = 0.7698)
+
+# *** Significant ***
+
+# Check assumptions
+
+plot(residuals(NCA.mpa.lm))
+shapiro.test(residuals(NCA.mpa.lm))
+
+# Residuals normal
+
+# Run Ref
+
+NCA.ref.lm <- lm(formula = avg.rich ~ Year, data = NCA.ref)
+summary(NCA.ref.lm)
+
+# (Year: t = 7.309, p = 0.001864)
+# (df = 1,4, F = 53.42, p = 0.001864)
+# (y~-2588.2127+1.2931(Year))
+# (R = 0.9303)
+
+# *** Significant ****
+
+# Check assumptions
+
+plot(residuals(NCA.ref.lm))
+shapiro.test(residuals(NCA.ref.lm))
+
+# Residuals normal
+
+# Plot MPA and Ref regressions
+
+ggplot() +
+  geom_point(data=NCA.ref,aes(x=Year,y=avg.rich,colour=Designation,
+                              shape=MPA_Group)) +
+  stat_smooth(data=NCA.ref,aes(x=Year,y=avg.rich,colour=Designation),
+              method = lm, formula = y~x) +
+  geom_point(data=NCA.mpa,aes(x=Year,y=avg.rich,colour=Designation,
+                              shape=MPA_Group)) +
+  stat_smooth(data=NCA.mpa,aes(x=Year,y=avg.rich,colour=Designation), 
+              method = lm, formula = y~x) +
+  scale_color_manual(values= c("#0000ff","#ff0000"),
+                     breaks = c("Reference","MPA")) +
+  ggtitle("Species richness in Northern CA over time") +
+  xlab("Year") +
+  ylab("No. of species") +
+  xlim(2011,2019)
+```
+
+# Run Central CA
+```{r}
+
+CCA <- subset(mod.avg, MPA_Group == "Point Buchon" | 
+                MPA_Group == "Point Lobos" | MPA_Group == "Point Sur")
+
+# Subset by designation
+
+CCA.mpa <- subset(CCA, Designation == "MPA")
+CCA.ref <- subset(CCA, Designation == "Reference")
+
+# Run MPA first
+
+CCA.mpa.lm <- lm(formula = avg.rich ~ Year, data = CCA.mpa)
+summary(CCA.mpa.lm)
+
+# (Year: t = 2.135, p = 0.05411)
+# (df = 1,12, F = 4.557, p = 0.05411)
+# (y~-1032.0771+0.5212(Year))
+# (R = 0.2752)
+
+# Test assumptions
+
+plot(residuals(CCA.mpa.lm))
+shapiro.test(residuals(CCA.mpa.lm))
+
+# Residuals normal
+
+# Run Ref
+
+CCA.ref.lm <- lm(formula = avg.rich ~ Year, data = CCA.ref)
+summary(CCA.ref.lm)
+
+# (Year: t = 2.966, p = 0.0180)
+# (df = 1,8, F = 8.799, p = 0.01797)
+# (y~-1577.5313+0.7923(Year))
+# (R = 0.5238)
+
+# *** Significant ***
+
+# Test assumptions
+
+plot(residuals(CCA.ref.lm))
+shapiro.test(residuals(CCA.ref.lm))
+
+# Residuals normal
+
+# Plot MPA and Ref regressions
+
+ggplot() +
+  geom_point(data=CCA.ref,aes(x=Year,y=avg.rich,colour=Designation,
+                              shape=MPA_Group)) +
+  stat_smooth(data=CCA.ref,aes(x=Year,y=avg.rich,colour=Designation),
+              method = lm, formula = y~x) +
+  geom_point(data=CCA.mpa,aes(x=Year,y=avg.rich,colour=Designation,
+                              shape=MPA_Group)) +
+  stat_smooth(data=CCA.mpa,aes(x=Year,y=avg.rich,colour=Designation), 
+              method = lm, formula = y~x) +
+  scale_color_manual(values= c("#0000ff","#ff0000"),
+                     breaks = c("Reference","MPA")) +
+  ggtitle("Species richness in Central CA over time") +
+  xlab("Year") +
+  ylab("No. of species") +
+  xlim(2007,2019)
+```
+# Run ANCOVA and linear regression with latitude data to determine relationship
+# between latitude and diversity
+```{r}
+
+# Data with latitude
+
+data <- data.frame(read.csv("Avg.transects.lat.csv"))
+
+# Add diversity metric
+
+data <- mutate(data, diversity = diversity(data[9:166]))
+
+# Add diversity average
+
+grp.mean <- data %>%
+  group_by_all() %>%
+  mutate(newnames=paste0(Year, MPA_Group, Type))
+
+split.mean <- split(grp.mean, grp.mean$newnames)
+for (I in 1:length(split.mean)) {assign(unique(split.mean[[I]]$newnames), 
+                                        split.mean[[I]])}
+
+mean.div <- lapply(split.mean, function(x){
+  
+  x <- mutate(x, avg.div=mean(x$diversity))
+  x <- mutate(x, div.sd=sd(x$diversity))
+  x <- mutate(x, div.SE=div.sd/length(x$diversity))
+  
+})
+
+div.avgs <- bind_rows(mean.div)
+
+# Remove excess data
+
+p1 <- div.avgs[1:9]
+p2 <- div.avgs[167:171]
+mod.avg <- cbind(p1,p2)
+mod.avg <- mod.avg[!duplicated(mod.avg[12]),]
+mod.avg <- as.data.frame(mod.avg)
+mod.avg$Year <- as.factor(mod.avg$Year)
+mod.avg <- subset(mod.avg, Designation == "MPA" | Designation == "Reference")
+
+# ANCOVA
+# Two-way ANOVA with no interaction
+
+MPA.aov = lm(avg.div~Latitude+Year,data=mod.avg)
+Anova(MPA.aov,type="III")
+summary(MPA.aov)
+
+# Latitude and Year are both significant
+# Test normality of residuals
+
+par(mfrow=c(2,2))
+plot(MPA.aov)
+shapiro.test(MPA.aov$residuals)
+
+# Data is approximately normal for the number of data points
+# Proceed to interaction
+
+MPA.aov2 = aov(avg.div~Latitude*Year,data=mod.avg)
+summary(MPA.aov2)
+
+# Interaction is NOT significant
+# Assess the assumptions
+
+plot(MPA.aov2)
+shapiro.test(MPA.aov2$residuals)
+leveneTest(mod.avg$Latitude, mod.avg$Year)
+
+# Variance is roughly equal and residuals are roughly normal considering the
+# data.
+
+# Run post-hoc on model with no interactions
+
+Tukey=glht(MPA.aov, linfct = mcp(Year ="Tukey"))
+summary(Tukey)
+
+# The only year that's different is 2014 from 2008, 2009, 2016 & 2019.
+# 2014 had very low diversity, probably due to the heat wave (p < 0.05).
+
+# There was a significant difference found between (average) diversity 
+# for different latitudes (df = 1,147, F = 9.7822, p = 0.002125) and year
+# (df = 10,147, F = 4.0950, p = 5.48e-05).
+
+# *** Significant ***
+
+# Linear regression between diversity and latitude
+
+lat.lm <- lm(formula = avg.div ~ Latitude, data = mod.avg)
+summary(lat.lm)
+
+# (Year: t = 2.940, p = 0.00377)
+# (df = 1,157, F = 8.646, p = 0.003774)
+# (y~0.656167+0.027678(Latitude))
+# (R = 0.05219)
+
+# *** Significant ***
+
+plot(residuals(lat.lm))
+ggqqplot(lat.lm$residuals)
+shapiro.test(residuals(lat.lm))
+
+# Residuals are about as close to normal as you can ask for this data set
+
+# Plot MPA and Ref regressions for channel islands
+
+ggplot() +
+  geom_point(data=mod.avg, aes(x=Latitude,y=avg.div,colour=Region)) +
+  stat_smooth(data=mod.avg,aes(x=Latitude,y=avg.div),
+              method = lm, formula = y~x) +
+  scale_color_manual(values= c("#0000ff","#00ff7f","#ff0000"),
+                     breaks = c("North","Central","South")) +
+  ggtitle("Shannon diversity across CA latitude") +
+  xlab("Latitude") +
+  ylab("Shannon diversity")
+
+```
+# Repeat above, but using richness instead of diversity
+```{r}
+
+# Add richness metric
+
+data <- mutate(data, richness = rowSums(data[9:165]!=0))
+
+# Add richness average
+
+grp.mean <- data %>%
+  group_by_all() %>%
+  mutate(newnames=paste0(Year, MPA_Group, Type))
+
+split.mean <- split(grp.mean, grp.mean$newnames)
+for (I in 1:length(split.mean)) {assign(unique(split.mean[[I]]$newnames), split.mean[[I]])}
+
+mean.rich <- lapply(split.mean, function(x){
+  
+  x <- mutate(x, avg.rich=mean(x$richness))
+  x <- mutate(x, rich.sd=sd(x$richness))
+  x <- mutate(x, rich.SE=rich.sd/length(x$richness))
+  
+})
+
+rich.avgs <- bind_rows(mean.rich)
+
+# Remove excess data
+
+p1 <- rich.avgs[1:9]
+p2 <- rich.avgs[167:171]
+mod.avg <- cbind(p1,p2)
+mod.avg <- mod.avg[!duplicated(mod.avg[12]),]
+mod.avg$Year <- as.factor(mod.avg$Year)
+
+# ANCOVA
+# Two-way ANOVA with no interaction
+
+MPA.aov = lm(avg.rich~Latitude+Year,data=mod.avg)
+Anova(MPA.aov,type="III")
+summary(MPA.aov)
+
+# Latitude and Year are both significant
+# Test normality of residuals
+
+par(mfrow=c(2,2))
+plot(MPA.aov)
+shapiro.test(MPA.aov$residuals)
+
+# Data is approximately normal for the number of data points
+# Proceed to interaction
+
+MPA.aov2 = aov(avg.rich~Latitude*Year,data=mod.avg)
+summary(MPA.aov2)
+
+# Interaction is NOT significant
+# Assess the assumptions
+
+plot(MPA.aov2)
+shapiro.test(MPA.aov2$residuals)
+leveneTest(mod.avg$Latitude, mod.avg$Year)
+
+# Variance is roughly equal and residuals are roughly normal considering the
+# data.
+
+# Run post-hoc on model with no interactions
+
+Tukey=glht(MPA.aov, linfct = mcp(Year ="Tukey"))
+summary(Tukey)
+
+# 2019 is different from 2005, 2006, 2007, 2008, 2009, 2012, 2014, 2015 & 2016.
+# 2014 is different from 2011 (p < 0.05).
+
+# There was a significant difference found between (average) richness 
+# for different latitudes (df = 1,114, F = 74.086, p = 4.73e-14) and year
+# (df = 10,956.1, F = 14.402, p = 3.22e-16).
+
+# *** Significant ***
+
+# Linear regression between richness and latitude
+
+lat.lm <- lm(formula = avg.rich ~ Latitude, data = mod.avg)
+summary(lat.lm)
+
+# (Year: t = 6.144, p = 6.3e-09)
+# (df = 1,158, F = 37.74, p = 6.296e-09)
+# (y~-12.6237+0.7947(Latitude))
+# (R = 0.1928)
+
+# *** Significant ***
+
+plot(residuals(lat.lm))
+ggqqplot(lat.lm$residuals)
+shapiro.test(residuals(lat.lm))
+
+# Residuals are about as close to normal as you can ask for this data set
+
+# Plot MPA and Ref regressions for channel islands
+
+ggplot() +
+  geom_point(data=mod.avg, aes(x=Latitude,y=avg.rich,colour=Region)) +
+  stat_smooth(data=mod.avg,aes(x=Latitude,y=avg.rich),
+              method = lm, formula = y~x) +
+  scale_color_manual(values= c("#0000ff","#00ff7f","#ff0000"),
+                     breaks = c("North","Central","South")) +
+  ggtitle("Species richness across CA latitude") +
+  xlab("Latitude") +
+  ylab("No. of species")
+
+```
+
