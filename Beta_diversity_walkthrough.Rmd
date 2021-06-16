@@ -1,0 +1,152 @@
+---
+title: "Beta_diversity"
+author: "Jackson Hoeke"
+date: "6/16/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggpubr)
+library(tidyverse)
+library(plyr)
+library(dplyr)
+library(vegan)
+library(yarrr)
+library(scales)
+library(cowplot)
+library(grid)
+library(janitor)
+library(mobr)
+setwd("C:/Users/Jackson/Desktop/Marine Bio/Deepwater_MPAs/Subprojects/Beta_diversity")
+```
+
+# Beta diversity statistics and analysis
+# Example data will be Central California, 2016
+
+# Import data and create 'mob' object
+```{r}
+Central <- data.frame(read.csv("Central.data.csv")) # Import data
+Central.2016 <- subset(Central, Year == "2016") # Subset to 2016
+Central.mob.2016 <- make_mob_in(Central.2016[,8:163], Central.2016[,1:7],coord_names=c('Longitude', 'Latitude'),binary=FALSE,latlong=TRUE)
+# Create the 'mob' object for analysis, the first argument is the species
+# abundance matrix, the second argument are the tags, (year, mpa, etc.), 
+# coord_names marks latitude and longitude, binary is for presence/absence
+# FALSE here, and latlong determines if latitude and longitude data are
+# recognized
+```
+
+# Analysis
+```{r}
+central.stats <- get_mob_stats(Central.mob.2016, group_var="Designation", 
+                               ref_level= 'Reference')
+# This function essentially grabs the beta statistics and performs a bunch of 
+# tests using one-way ANOVAs to test for differences between measurements such
+# as N, S, PIE, etc.
+
+# group_var refers to the column denoting treatment type, and ref_level is the 
+# base level that other treatments are being compared to. 
+
+print(central.stats)
+# The statistics just measured. Here, stats such as N, S, and different betas
+# are all logged, and one-way ANOVA test results are displayed. 
+
+plot(central.stats)
+# This plots the results of the statistical tests printed above using bar charts
+# D(bar) is an absolute abundance statistic, which I don't beleive is important
+# to our goals right now. The p value is from the ANOVA test.
+
+central.delta <- get_delta_stats(Central.mob.2016, 'Designation', 
+                                 ref_level = 'Reference',
+                type = 'discrete', log_scale=TRUE, n_perm=100)
+# This function compares different curves using the alpha, beta and gamma models
+# and runs permutations to estimate statistics with increasing sites or
+# individuals sampled
+# type is the kind of analysis run (discrete compares all other groups and the
+# reference group), n_perm is the number of permutations. 
+
+print(central.delta)
+# Prints the results of running the delta_stats function. I do not yet know
+# quite what the difference is between effect, low_effect, etc. I am currently 
+# trying to figure that out.
+# Effort is the number of samples, whether that is sites or individuals.
+
+plot(central.delta)
+# The plotted results of the above stats
+# I am ordering these 1-9 from top-left to bottom right
+
+# 1: the sSBR curve, or spatial sample-based rarefaction, where aggregation 
+# effects are examined by starting at one plot (MPA) and looking at species
+# richness in the next closest plot (MPA). Here, the plot shows consistently
+# higher richness in the MPA than the reference as sites (MPAs) are analyzed
+
+# 2: the nsSBR curve, or non-spatial sample-based rarefaction. In this instance,
+# it is actually nearly identical to the IBR curve, so I will describe that 
+# next instead.
+
+# 3: the IBR curve, or individual-based rarefaction, where individual organisms,
+# not sites, are the units analyzed on the x-axis, and richness on the y-axis.
+# As individuals in both the MPA and Reference site are sampled, they begin
+# almost identical, but as more individuals are sampled, MPAs tend to have 
+# higher richness.
+
+# 4: Aggregation effects on richness (S). In both the MPA and reference, any
+# aggregation effects appear to reduce richness, but this is with 3 sites
+# across central CA, not transects, so these results are, to put it lightly,
+# pretty sus.
+
+# 5: Abundance (N) effects on richness. Here, increasing the number of 
+# individuals sampled models that richness is higher in the reference site
+# than in the MPA by about one species (that is to say, not very different).
+
+# 6: Species abundance distribution (SAD) effects on richness. As more 
+# individuals are sampled and SAD increases, S also increases about equal in 
+# both the MPA and refernce site. 
+
+# 7: Slope of beta due to the role of aggregation. By plotting the difference
+# between the MPA and reference sSBR curves, doing the same for the nsSBR 
+# curves, and then taking the differences between those two differences, the 
+# aggregative effects on richness (and ultimately beta) are isolated.
+# Here, as more sites (MPAs) are sampled, aggregative effects on beta diversity 
+# decrease. 
+
+# 8: Slope of beta due to the role of total abundance. By plotting the
+# difference between the MPA and reference nsSBR curves, doing the same for the 
+# IBR curves, and then taking the differences between those two differences, the
+# abundance effects on richness (and extrapolated to beta) are isolated.
+# Here, there is a slight decrease in beta as more individuals are sampled.
+
+# 9: Slope of beta due to the role of SAD. By taking the difference between the
+# Reference and MPA IBR curves and plotting it, the SAD effects on richness and
+# (through extrapolation) beta are isolated. Here, beta increases due to SAD as
+# more individuals are sampled. 
+
+# Final thoughts: While I am still working on interpreting a couple of variables
+# I believe I understand most of this package and functions at a basic level.
+# However, I am not sure that pursuing this will provide much information. 
+# This package and analyses focus on spatial effects, true, but they do not work 
+# over time, so that limits the amount of data available and therefore makes
+# creating these models somewhat difficult, not so much with nsSBR and IBR, but
+# definately with sSBR. 
+
+# I am not sure that using MPAs in a single region in a year will provide
+# enough alpha-scale replicates to make this model work and demonstrate
+# significant differences in designation or look at aggregation effects.
+# However, I can think of other ways to implement it. 
+
+# First, we could take a year like 2014 or 2015, where A LOT of sites were
+# sampled all over California and run a statewide data set in those two years.
+# Obviously that's a ton of variables, but I think it might be worth a shot. 
+# Certainly it would solve the issue of having little replication at the alpha
+# scale.
+
+# Second, I can look at individual MPAs in a year (i.e. Point Lobos 2008) using
+# transects as the alpha scale and the whole MPA as the gamma scale. This would 
+# be great, except that if I did this for every MPA every year we would end up
+# with literally HUNDREDS of analyses. It would be ideal for looking at
+# before and after snapshots of certain MPAs though (i.e. Bodega Bay in 2011 and 
+# Bodega Bay in 2019). I could also run this on Anacapa, using type as treatment
+# instead of designation. Such a shame there's no reference site...
+
+```
+
