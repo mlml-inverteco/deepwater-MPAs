@@ -1,0 +1,707 @@
+---
+title: "Species Accumulation Curves"
+author: "Jackson Hoeke"
+date: "6/24/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(ggpubr)
+library(car)
+library(gridExtra)
+library(agricolae)
+library(pwr)
+library(sjstats)
+library(tidyverse)
+library(plyr)
+library(dplyr)
+library(vegan)
+library(yarrr)
+library(scales)
+library(cowplot)
+library(zoo)
+library(grid)
+```
+
+# Function
+```{r}
+
+accumulation  <- function(df){ # df is the data frame imput
+  
+  ### Generate curves to graph average species richness along a transect for ###
+  ### each year ###
+  
+  grp.line <- df %>% 
+    group_by_all() %>%
+    mutate(newnames=paste0(Year, Line)) 
+  
+  # Create newnames column based on Year 
+  # and transect line
+  
+  split.line <- split(grp.line, grp.line$newnames)
+  for (I in 1:length(split.line)) {assign(unique(split.line[[I]]$newnames), 
+                                          split.line[[I]])}
+  
+  # Split data frame by Year and transect line
+  
+  reassemble <- lapply(split.line, function(x){
+    x <- subset(x, Cumulative.Dist..m. != 0)
+    x <- mutate(x, 
+                cumulative_species = cummax(as.numeric(factor(x$CommonName, 
+                                                              levels = unique(x$CommonName)))))
+  })
+  
+  # Create a cumulative species column for each year and transect line, so that 
+  # as the transect progresses, the total species richness is recorded.
+  
+  rebound <- as.data.frame(bind_rows(reassemble))
+  
+  # Bind the split data frames back into one frame 
+  
+  MPAs <- subset(rebound, Designation == "MPA")
+  References <- subset(rebound, Designation == "Reference")
+  
+  # Divide the newly rebound frame into an MPA frame and a reference frame
+  
+  ## MPA ##
+  
+  MPA_parameter <- MPAs[1,6] # Title the MPA location
+  
+  MPAs$Year <- as.factor(MPAs$Year) # Make sure that the year column is a factor
+  
+  MPAplot <- ggplot(MPAs, aes(x = Cumulative.Dist..m., y = cumulative_species, 
+                              color=Year)) +
+    stat_smooth(method = "lm", formula = y ~ log(x), size = 1) +
+    stat_summary_bin(fun="mean", bins=50, size=1, geom = "point") +
+    stat_summary_bin(fun.data=mean_se, fun.args=list(mult=1.96), bins = 50, 
+                     size = 0.75) +
+    stat_smooth(data = MPAs, aes(x = Cumulative.Dist..m., 
+                                 y = cumulative_species, color = "MPA"), 
+                method = "lm", formula = y ~ log(x), size = 3) +
+    scale_color_manual(values= c("#b22222", "#ff4500", "#ff8c00", "#ffd700", 
+                                 "#6b8e23", "#00ff7f", "#40e0d0", "#1e90ff", 
+                                 "#6a5acd", "#9457eb", "#c71585", "#ff0000"),
+                       breaks = c("2005", "2006", "2007", "2008", "2009", 
+                                  "2011", "2012", "2014", "2015", "2016", 
+                                  "2019", "MPA")) +
+    ggtitle(paste0(MPA_parameter), MPAs[1,8]) +
+    xlab("Average transect distance (m)") +
+    ylab("# of species") +
+    xlim(0, 500) +
+    ylim(0, 30)
+  
+  # Plot the average species accumulation curves across a transect for the MPA
+  # each year
+  
+  ## Reference ##
+  
+  # Repeat the above lines of code, but for the reference site
+  
+  ref_parameter <- References[1,6] # Title the MPA location
+  
+  References$Year <- as.factor(References$Year)
+  
+  # Make sure that the year column is a factor
+  
+  Refplot <- ggplot(References, aes(x = Cumulative.Dist..m., 
+                                    y = cumulative_species, color=Year)) +
+    stat_smooth(method = "lm", formula = y ~ log(x), size = 1) +
+    stat_summary_bin(fun="mean", bins=50, size=1, geom = "point") +
+    stat_summary_bin(fun.data=mean_se, fun.args=list(mult=1.96), bins = 50, 
+                     size = 0.75) +
+    stat_smooth(data = References, aes(x = Cumulative.Dist..m., 
+                                       y = cumulative_species, 
+                                       color = "Reference"), 
+                method = "lm", formula = y ~ log(x), size = 3) +
+    scale_color_manual(values= c("#b22222", "#ff4500", "#ff8c00", "#ffd700", 
+                                 "#6b8e23", "#00ff7f", "#40e0d0", "#1e90ff", 
+                                 "#6a5acd", "#9457eb", "#c71585", "#0000ff"),
+                       breaks = c("2005", "2006", "2007", "2008", "2009", 
+                                  "2011", "2012", "2014", "2015", "2016", 
+                                  "2019", "Reference")) +
+    ggtitle(paste0(ref_parameter), References[1,8]) +
+    xlab("Average transect distance (m)") +
+    ylab("# of species") +
+    xlim(0, 500) +
+    ylim(0, 30)
+  
+  # Plot the average species accumulation curves across a transect for the MPA
+  # each year
+  
+  ### Generate curves to graph total species richness using all transects ###
+  ### for each year ###
+  
+  grp.no. <- df %>%
+    group_by_all() %>%
+    mutate(newnames=paste0(Year, Designation))
+  
+  # Using the original data frame, create a newnames column based on Year and
+  # Designation
+  
+  split.no. <- split(grp.no., grp.no.$newnames)
+  for (I in 1:length(split.no.)) {assign(unique(split.no.[[I]]$newnames), 
+                                         split.no.[[I]])}
+  
+  # Split data frame by Year and designation
+  
+  reassemble <- lapply(split.no., function(x){
+    x <- subset(x, Cumulative.Dist..m. != 0)
+    x <- mutate(x, 
+                cumulative_species = cummax(as.numeric(factor(x$CommonName, 
+                                                                 levels = unique(x$CommonName)))))
+    x <- mutate(x, 
+                transect_no. = cummax(as.numeric(factor(x$Line, 
+                                                        levels = unique(x$Line)))))
+  })
+  
+  # Create a maximum cumulative species column for each year and transect line, 
+  # so that the total species richness for each transect is recorded.
+  
+  rebound <- as.data.frame(bind_rows(reassemble))
+  
+  # Rebind split frames into one data frame
+  
+  MPAs <- subset(rebound, Designation == "MPA")
+  References <- subset(rebound, Designation == "Reference")
+  
+  # Divide new data frame into MPA and reference data
+  
+  ## MPA ##
+  
+  MPA_parameter <- MPAs[1,6] # Name MPA 
+  
+  MPAs$Year <- as.factor(MPAs$Year) # Make sure MPA column is a factor
+  
+  MPAplot.no. <- ggplot(MPAs, aes(x = transect_no., y = cumulative_species, 
+                                  color=Year)) +
+    stat_smooth(method = "lm", formula = y ~ log(x), size = 1) +
+    stat_summary_bin(fun="mean", bins=10, size=1, geom = "point") +
+    stat_summary_bin(fun.data=mean_se, fun.args=list(mult=1.96), bins = 10, 
+                     size = 0.75) +
+    stat_smooth(data = MPAs, aes(x = transect_no., y = cumulative_species, 
+                                 color = "MPA"), 
+                method = "lm", formula = y ~ log(x), size = 3) +
+    scale_color_manual(values= c("#b22222", "#ff4500", "#ff8c00", "#ffd700", 
+                                 "#6b8e23", "#00ff7f", "#40e0d0", "#1e90ff", 
+                                 "#6a5acd", "#9457eb", "#c71585", "#ff0000"),
+                       breaks = c("2005", "2006", "2007", "2008", "2009", 
+                                  "2011", "2012", "2014", "2015", "2016", 
+                                  "2019", "MPA")) +
+    ggtitle(paste0(MPA_parameter), MPAs[1,8]) +
+    xlab("No. of transects") +
+    ylab("# of species") +
+    xlim(0, 20) +
+    ylim(0, 60)
+  
+  # Plot the species accumulation curves using successive transects for the MPA
+  # each year to find a "total" species richness in the MPA for each year
+  
+  ## Reference ##
+  
+  # Repeat above code, but for the reference site.
+  
+  ref_parameter <- References[1,6] # Name reference
+  
+  References$Year <- as.factor(References$Year) 
+  
+  # Make sure Year column is a factor
+  
+  Refplot.no. <- ggplot(References, aes(x = transect_no., 
+                                        y = cumulative_species, color=Year)) +
+    stat_smooth(method = "lm", formula = y ~ log(x), size = 1) +
+    stat_summary_bin(fun="mean", bins=10, size=1, geom = "point") +
+    stat_summary_bin(fun.data=mean_se, fun.args=list(mult=1.96), bins = 10, 
+                     size = 0.75) +
+    stat_smooth(data = References, aes(x = transect_no., y = cumulative_species, 
+                                       color = "Reference"), 
+                method = "lm", formula = y ~ log(x), size = 3) +
+    scale_color_manual(values= c("#b22222", "#ff4500", "#ff8c00", "#ffd700", 
+                                 "#6b8e23", "#00ff7f", "#40e0d0", "#1e90ff", 
+                                 "#6a5acd", "#9457eb", "#c71585", "#0000ff"),
+                       breaks = c("2005", "2006", "2007", "2008", "2009", 
+                                  "2011", "2012", "2014", "2015", "2016", 
+                                  "2019", "Reference")) +
+    ggtitle(paste0(ref_parameter), References[1,8]) +
+    xlab("No. of transects") +
+    ylab("# of species") +
+    xlim(0, 20) +
+    ylim(0, 60)
+  
+  # Plot the species accumulation curves using successive transects for the
+  # reference each year to find a "total" species richness in the reference for 
+  # each year
+
+  ### Plot differences in total species richness between MPA and reference ###
+  ### site each year ###
+  
+  a1 <- c(1, 10)
+  a2 <- rep(0, 10)
+  dummy_data <- data.frame(transect_no. = a1, cumulative_species = a2)
+  
+  # Create "dummy data" to fill in for years with no data ###
+  
+  if ("2005" %in% MPAs$Year) {
+    y2005 <- subset(MPAs, Year == "2005")
+  } else {
+    y2005 <- dummy_data <- mutate(dummy_data, Year = 2005)
+  }
+  if ("2006" %in% MPAs$Year) {
+    y2006 <- subset(MPAs, Year == "2006")
+  } else {
+    y2006 <- dummy_data <- mutate(dummy_data, Year = 2006)
+  }
+  if ("2007" %in% MPAs$Year) {
+    y2007 <- subset(MPAs, Year == "2007")
+  } else {
+    y2007 <- dummy_data <- mutate(dummy_data, Year = 2007)
+  }
+  if ("2008" %in% MPAs$Year) {
+    y2008 <- subset(MPAs, Year == "2008")
+  } else {
+    y2008 <- dummy_data <- mutate(dummy_data, Year = 2008)
+  }
+  if ("2009" %in% MPAs$Year) {
+    y2009 <- subset(MPAs, Year == "2009")
+  } else {
+    y2009 <- dummy_data <- mutate(dummy_data, Year = 2009)
+  }
+  if ("2011" %in% MPAs$Year) {
+    y2011 <- subset(MPAs, Year == "2011")
+  } else {
+    y2011 <- dummy_data <- mutate(dummy_data, Year = 2011)
+  }
+  if ("2012" %in% MPAs$Year) {
+    y2012 <- subset(MPAs, Year == "2012")
+  } else {
+    y2012 <- dummy_data <- mutate(dummy_data, Year = 2012)
+  }
+  if ("2014" %in% MPAs$Year) {
+    y2014 <- subset(MPAs, Year == "2014")
+  } else {
+    y2014 <- dummy_data <- mutate(dummy_data, Year = 2014)
+  }
+  if ("2015" %in% MPAs$Year) {
+    y2015 <- subset(MPAs, Year == "2015")
+  } else {
+    y2015 <- dummy_data <- mutate(dummy_data, Year = 2015)
+  }
+  if ("2016" %in% MPAs$Year) {
+    y2016 <- subset(MPAs, Year == "2016")
+  } else {
+    y2016 <- dummy_data <- mutate(dummy_data, Year = 2016)
+  }
+  if ("2019" %in% MPAs$Year) {
+    y2019 <- subset(MPAs, Year == "2019")
+  } else {
+    y2019 <- dummy_data <- mutate(dummy_data, Year = 2019)
+  }
+  if ("2005" %in% References$Year) {
+    x2005 <- subset(References, Year == "2005")
+  } else {
+    x2005 <- dummy_data <- mutate(dummy_data, Year = 2005)
+  }
+  if ("2006" %in% References$Year) {
+    x2006 <- subset(References, Year == "2006")
+  } else {
+    x2006 <- dummy_data <- mutate(dummy_data, Year = 2006)
+  }
+  if ("2007" %in% References$Year) {
+    x2007 <- subset(References, Year == "2007")
+  } else {
+    x2007 <- dummy_data <- mutate(dummy_data, Year = 2007)
+  }
+  if ("2008" %in% References$Year) {
+    x2008 <- subset(References, Year == "2008")
+  } else {
+    x2008 <- dummy_data <- mutate(dummy_data, Year = 2008)
+  }
+  if ("2009" %in% References$Year) {
+    x2009 <- subset(References, Year == "2009")
+  } else {
+    x2009 <- dummy_data <- mutate(dummy_data, Year = 2009)
+  }
+  if ("2011" %in% References$Year) {
+    x2011 <- subset(References, Year == "2011")
+  } else {
+    x2011 <- dummy_data <- mutate(dummy_data, Year = 2011)
+  }
+  if ("2012" %in% References$Year) {
+    x2012 <- subset(References, Year == "2012")
+  } else {
+    x2012 <- dummy_data <- mutate(dummy_data, Year = 2012)
+  }
+  if ("2014" %in% References$Year) {
+    x2014 <- subset(References, Year == "2014")
+  } else {
+    x2014 <- dummy_data <- mutate(dummy_data, Year = 2014)
+  }
+  if ("2015" %in% References$Year) {
+    x2015 <- subset(References, Year == "2015")
+  } else {
+    x2015 <- dummy_data <- mutate(dummy_data, Year = 2015)
+  }
+  if ("2016" %in% References$Year) {
+    x2016 <- subset(References, Year == "2016")
+  } else {
+    x2016 <- dummy_data <- mutate(dummy_data, Year = 2016)
+  }
+  if ("2019" %in% References$Year) {
+    x2019 <- subset(References, Year == "2019")
+  } else {
+    x2019 <- dummy_data <- mutate(dummy_data, Year = 2019)
+  }
+  
+  # Create elements that are total species richness in MPA and reference
+  # each year, and replace with dummy data if that year is not available 
+  
+  Difference <- c((max(y2005$cumulative_species)-max(x2005$cumulative_species)),
+                  (max(y2006$cumulative_species)-max(x2006$cumulative_species)),
+                  (max(y2007$cumulative_species)-max(x2007$cumulative_species)),
+                  (max(y2008$cumulative_species)-max(x2008$cumulative_species)),
+                  (max(y2009$cumulative_species)-max(x2009$cumulative_species)),
+                  (max(y2011$cumulative_species)-max(x2011$cumulative_species)),
+                  (max(y2012$cumulative_species)-max(x2012$cumulative_species)),
+                  (max(y2014$cumulative_species)-max(x2014$cumulative_species)),
+                  (max(y2015$cumulative_species)-max(x2015$cumulative_species)),
+                  (max(y2016$cumulative_species)-max(x2016$cumulative_species)),
+                  (max(y2019$cumulative_species)-max(x2019$cumulative_species)))
+  
+  # Take differences between the MPA and reference site each year and
+  # concatenate into a vector.
+  
+  Different_year <- data.frame(Difference, Year <- c(2005,2006,2007,2008,2009,
+                                                     2011,2012,2014,2015,2016,
+                                                     2019))
+  
+  # Create vector of years  
+  
+  Different_year[Different_year == 0] <- NA
+  
+  # Replace zeroes with NAs
+  
+  ### Create plot of the (average) derivatives of the species accumulation ###
+  ### curves ###
+  
+  MPA_model <- lm(cumulative_species~log(transect_no.),data=MPAs)
+  
+  # Logarithmic model for the total species across successive transects in 
+  # the MPA 
+  
+  Ref_model <- lm(cumulative_species~log(transect_no.),data=References)
+  
+  # Logarithmic model for the total species across successive transects in 
+  # the MPA 
+  
+  X1 <- data.frame(transect_no.=seq(1.0,length=30)) # make an ordered sequence
+  Y1 <- predict(MPA_model,newdata=X1) # calculate predictions for that sequence
+  
+  X2 <- data.frame(transect_no.=seq(1.0,length=30)) 
+  Y2 <- predict(Ref_model,newdata=X2) # Repeat for the reference site
+  
+  dY1 <- diff(Y1)/diff(X1$transect_no.)  # the derivative of your function
+  dX1 <- rowMeans(embed(X1$transect_no.,2)) # centers the X values for plotting
+  
+  dY2 <- diff(Y2)/diff(X2$transect_no.)
+  dX2 <- rowMeans(embed(X2$transect_no.,2)) # Repeat for the reference site
+  
+  datum1 <- data.frame(dX1, dY1) # Derivatives plotted with increasing transects
+  datum2 <- data.frame(dX2, dY2) # Repeat for the reference site
+  
+  Derivatives <- ggplot(data = datum1, mapping = aes(x = dX1, y = dY1, color = "MPA")) + 
+    geom_line() + 
+    geom_line(data = datum2, mapping = aes(x = dX2, y = dY2, color = "Reference")) +
+    xlab("Difference in no. of transects") +
+    ylab("Difference in no. of species") +
+    ggtitle("Derivatives")
+  
+  # Plot the derivatives of the species accumulation curves 
+  
+  ### Determine and plot slopes of species accumulation curves across all ###
+  ### transects each year ###
+  
+  Slope <- function(x){
+    model <- lm(cumulative_species~log(transect_no.),data=x) # create model
+    x1 <- data.frame(transect_no.=seq(1.0,length=30))
+    y1 <- predict(model,newdata=x1)
+    dx1 <- rowMeans(embed(x1$transect_no.,2)) # take means for x
+    dy1 <- diff(y1)/diff(x1$transect_no.) # take derivatives for y
+    exponent <- function(a, pow) (abs(a)^pow)*sign(a) 
+    # create function to take the derivative of ln(x) (finds slope)
+    x <- dx1
+    y <- dy1 # assign x and y
+    d <- data.frame(x,y)
+    expEstimate <- lm(y~exponent(x,-1),data=d)
+    ymxb <- coef(expEstimate)
+    print(ymxb[2]) # print the slope of the graph
+  }
+  
+  Slopes <- c(Slope(y2005), Slope(y2006), Slope(y2007), Slope(y2008),
+              Slope(y2009), Slope(y2011), Slope(y2012), Slope(y2014),
+              Slope(y2015), Slope(y2016), Slope(y2019), Slope(x2005), 
+              Slope(x2006), Slope(x2007), Slope(x2008), Slope(x2009), 
+              Slope(x2011), Slope(x2012), Slope(x2014), Slope(x2015), 
+              Slope(x2016), Slope(x2019))
+  
+  # Create a vector of the slopes in both reference and MPA each year
+  
+  New.data <- data.frame(Slopes, Designation = c("MPA","MPA","MPA","MPA","MPA","MPA","MPA","MPA","MPA","MPA","MPA","Reference",
+                                                 "Reference","Reference","Reference","Reference","Reference","Reference",
+                                                 "Reference","Reference",
+                                                 "Reference","Reference"), 
+                         Year = c(2005, 2006, 2007, 2008, 2009, 2011, 2012, 
+                                  2014, 2015, 2016, 2019, 2005, 2006, 2007, 
+                                  2008, 2009, 2011, 2012, 2014, 2015, 2016, 
+                                  2019))
+  New.data[New.data == 0] <- NA
+  
+  # Create data frame of slopes and associated information
+  
+  Slope_chart <- ggplot(New.data, 
+                        aes(x = Year, y = Slopes, fill = Designation)) +
+    geom_bar(stat="identity",position="dodge") +
+    ggtitle("Slopes of MPA and Reference over time") +
+    ylab("Slope") +
+    ylim(0, 35)
+  
+  # Plot bargraph of slopes in MPA and reference each year
+  
+  ### Calculate and plot total species richness in MPA and reference ###
+  ### referred to as "maximum richness", or just "max" in the code ###
+  
+  grp.max <- df %>%
+    group_by_all() %>%
+    mutate(newnames=paste0(Year, Designation))
+  
+  # Create newnames column using Year and Designation
+  
+  split.max <- split(grp.max, grp.max$newnames)
+  for (I in 1:length(split.max)) {assign(unique(split.max[[I]]$newnames), 
+                                         split.max[[I]])}
+  
+  # Divide data frame based on year and designation
+  
+  reassemble <- lapply(split.max, function(x){
+    x <- subset(x, Cumulative.Dist..m. != 0)
+    x <- mutate(x, 
+                meta_cumulative_species = cummax(as.numeric(factor(x$CommonName, 
+                                                                      levels = unique(x$CommonName)))))
+  })
+  
+  # Find the total species richness in each divided data frame
+  
+  rebound <- as.data.frame(bind_rows(reassemble))
+  
+  # Combine divded frames together with new total richness data column
+  
+  MPAs <- subset(rebound, Designation == "MPA")
+  References <- subset(rebound, Designation == "Reference")
+  
+  # Divide new data frame into MPA and reference data
+  
+  a1 <- c(1, 10)
+  a2 <- rep(0, 10)
+  dummy_data <- data.frame(transect_no. = a1, meta_cumulative_species = a2) 
+  
+  # Create new set of dummy data to replace years with no sampling
+  
+  if ("2005" %in% MPAs$Year) {
+    y2005 <- subset(MPAs, Year == "2005")
+  } else {
+    y2005 <- dummy_data <- mutate(dummy_data, Year = 2005)
+  }
+  if ("2006" %in% MPAs$Year) {
+    y2006 <- subset(MPAs, Year == "2006")
+  } else {
+    y2006 <- dummy_data <- mutate(dummy_data, Year = 2006)
+  }
+  if ("2007" %in% MPAs$Year) {
+    y2007 <- subset(MPAs, Year == "2007")
+  } else {
+    y2007 <- dummy_data <- mutate(dummy_data, Year = 2007)
+  }
+  if ("2008" %in% MPAs$Year) {
+    y2008 <- subset(MPAs, Year == "2008")
+  } else {
+    y2008 <- dummy_data <- mutate(dummy_data, Year = 2008)
+  }
+  if ("2009" %in% MPAs$Year) {
+    y2009 <- subset(MPAs, Year == "2009")
+  } else {
+    y2009 <- dummy_data <- mutate(dummy_data, Year = 2009)
+  }
+  if ("2011" %in% MPAs$Year) {
+    y2011 <- subset(MPAs, Year == "2011")
+  } else {
+    y2011 <- dummy_data <- mutate(dummy_data, Year = 2011)
+  }
+  if ("2012" %in% MPAs$Year) {
+    y2012 <- subset(MPAs, Year == "2012")
+  } else {
+    y2012 <- dummy_data <- mutate(dummy_data, Year = 2012)
+  }
+  if ("2014" %in% MPAs$Year) {
+    y2014 <- subset(MPAs, Year == "2014")
+  } else {
+    y2014 <- dummy_data <- mutate(dummy_data, Year = 2014)
+  }
+  if ("2015" %in% MPAs$Year) {
+    y2015 <- subset(MPAs, Year == "2015")
+  } else {
+    y2015 <- dummy_data <- mutate(dummy_data, Year = 2015)
+  }
+  if ("2016" %in% MPAs$Year) {
+    y2016 <- subset(MPAs, Year == "2016")
+  } else {
+    y2016 <- dummy_data <- mutate(dummy_data, Year = 2016)
+  }
+  if ("2019" %in% MPAs$Year) {
+    y2019 <- subset(MPAs, Year == "2019")
+  } else {
+    y2019 <- dummy_data <- mutate(dummy_data, Year = 2019)
+  }
+  if ("2005" %in% References$Year) {
+    x2005 <- subset(References, Year == "2005")
+  } else {
+    x2005 <- dummy_data <- mutate(dummy_data, Year = 2005)
+  }
+  if ("2006" %in% References$Year) {
+    x2006 <- subset(References, Year == "2006")
+  } else {
+    x2006 <- dummy_data <- mutate(dummy_data, Year = 2006)
+  }
+  if ("2007" %in% References$Year) {
+    x2007 <- subset(References, Year == "2007")
+  } else {
+    x2007 <- dummy_data <- mutate(dummy_data, Year = 2007)
+  }
+  if ("2008" %in% References$Year) {
+    x2008 <- subset(References, Year == "2008")
+  } else {
+    x2008 <- dummy_data <- mutate(dummy_data, Year = 2008)
+  }
+  if ("2009" %in% References$Year) {
+    x2009 <- subset(References, Year == "2009")
+  } else {
+    x2009 <- dummy_data <- mutate(dummy_data, Year = 2009)
+  }
+  if ("2011" %in% References$Year) {
+    x2011 <- subset(References, Year == "2011")
+  } else {
+    x2011 <- dummy_data <- mutate(dummy_data, Year = 2011)
+  }
+  if ("2012" %in% References$Year) {
+    x2012 <- subset(References, Year == "2012")
+  } else {
+    x2012 <- dummy_data <- mutate(dummy_data, Year = 2012)
+  }
+  if ("2014" %in% References$Year) {
+    x2014 <- subset(References, Year == "2014")
+  } else {
+    x2014 <- dummy_data <- mutate(dummy_data, Year = 2014)
+  }
+  if ("2015" %in% References$Year) {
+    x2015 <- subset(References, Year == "2015")
+  } else {
+    x2015 <- dummy_data <- mutate(dummy_data, Year = 2015)
+  }
+  if ("2016" %in% References$Year) {
+    x2016 <- subset(References, Year == "2016")
+  } else {
+    x2016 <- dummy_data <- mutate(dummy_data, Year = 2016)
+  }
+  if ("2019" %in% References$Year) {
+    x2019 <- subset(References, Year == "2019")
+  } else {
+    x2019 <- dummy_data <- mutate(dummy_data, Year = 2019)
+  }
+  
+  # Create data frames for each designation and year, replacing with 
+  # dummy data if year was not sampled
+  
+  maximum <- c((max(y2005$meta_cumulative_species)),
+               (max(y2006$meta_cumulative_species)),
+               (max(y2007$meta_cumulative_species)),
+               (max(y2008$meta_cumulative_species)),
+               (max(y2009$meta_cumulative_species)),
+               (max(y2011$meta_cumulative_species)),
+               (max(y2012$meta_cumulative_species)),
+               (max(y2014$meta_cumulative_species)),
+               (max(y2015$meta_cumulative_species)),
+               (max(y2016$meta_cumulative_species)),
+               (max(y2019$meta_cumulative_species)),
+               (max(x2005$meta_cumulative_species)),
+               (max(x2006$meta_cumulative_species)),
+               (max(x2007$meta_cumulative_species)),
+               (max(x2008$meta_cumulative_species)),
+               (max(x2009$meta_cumulative_species)),
+               (max(x2011$meta_cumulative_species)),
+               (max(x2012$meta_cumulative_species)),
+               (max(x2014$meta_cumulative_species)),
+               (max(x2015$meta_cumulative_species)),
+               (max(x2016$meta_cumulative_species)),
+               (max(x2019$meta_cumulative_species)))
+  
+  # Create vector of total species richness for each year and designation
+  
+  maxes <- data.frame(maximum, Designation = c("MPA","MPA","MPA","MPA","MPA","MPA","MPA","MPA","MPA","MPA","MPA","Reference",
+                                               "Reference","Reference","Reference","Reference","Reference","Reference",
+                                               "Reference","Reference",
+                                               "Reference","Reference"), 
+                      Years = c(2005,2006,2007,2008,2009,2011,2012,2014,2015,
+                                2016,2019,2005,2006,2007,2008,2009,2011,2012,
+                                2014,2015,2016,2019))
+  
+  # Create data frame of total richness with associated data
+  
+  maxes[maxes == 0] <- NA
+  
+  # Remove NAs
+  
+  maxes$Designation <- as.factor(maxes$Designation)
+  
+  # Ensure that designation is a factor
+  
+  max <- ggplot(maxes, aes(y=maximum,x=Years,fill=Designation)) +
+    geom_bar(position="dodge",stat="identity") +
+    ggtitle("Total Species Richness in MPA and Reference") +
+    ylim(0,80)
+  
+  # Plot barchart of total species richness in each year and designation
+  
+  ### Plot all graphs together in a grid ###
+  
+  top <- plot_grid(MPAplot, Refplot, labels = c('A','B'), align = 'h')
+  mid <- plot_grid(MPAplot.no., Refplot.no., labels = c('C','D'), align = 'h')
+  bot <- plot_grid(max, Slope_chart, Derivatives, labels = c('E','F','G'), 
+                   align = 'h')
+  
+  # Assign graphs to rows in the grid #
+  
+  top.widths <- top$widths[1:3]
+  mid.widths <- mid$widths[1:3]
+  bot.widths <- bot$widths[1:3]
+  max.widths <- unit.pmax(top.widths, mid.widths, bot.widths)
+  top$widths[1:3] <- max.widths
+  mid$widths[1:3] <- max.widths
+  bot$widths[1:3] <- max.widths
+  
+  # Determine widths are the same
+  
+  plot_grid(top, mid, bot, ncol = 1, rel_heights = c(1,1,2), align = 'v')
+  
+  # Plot rows together (as one vertical line) to form a single grid
+  
+}
+
+# Function complete
+```
+
+# Example using Point Lobos 
+```{r}
+setwd("C:/Users/Jackson/Desktop/Marine Bio/Deepwater_MPAs/Subprojects/Accumulation_Curves/2005-2016 Observations/MPA_data")
+Lobos <- data.frame(read.csv("Point_Lobos_Observations.csv"))
+accumulation(Lobos)
+```
+
