@@ -1,0 +1,146 @@
+---
+title: "ROV - Fish and Invert Analysis"
+author: "Shelby Ziegler"
+date: "7/12/2021"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+This R markdown file combined the ROV transect data for both fish and invertebrates into one dataset for analysis. 
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(plotrix)
+library(scales)
+
+theme_set(theme_classic(base_size=16))
+alpha=0.5
+```
+
+Read in the fish and invertebrate data sets. 
+```{r}
+fish<-read.csv("ROVFish_Transects_2005-2019SLZ.csv")
+
+invert<-read.csv("Invert_Transects_2005-2019_SLZ2021-07-12.csv")
+
+```
+
+Filter data so that only types with SMCA and SMR are included. Bin depths and filter out data outside of the 30-60m and 60-130m depth zones. Summarize data to calculate total density so all species based on MPA, depth zone, habitat type and species for both fish and invertebreate datasets. 
+
+```{r}
+summary(fish)
+
+#Filter out any MPA type that is not SMCA or SMR
+fish1<-fish%>%
+  group_by(Survey_Year, Region, MPA_Group, Type, Designation, Dive, Line, Habitat_Type, Avg_Depth..m., CommonName, SpeciesName)%>%
+  filter(Type=="SMCA" | Type=="SMR")
+
+#Bin depth data  
+b<-c(-Inf, 30, 60, 130, Inf)
+names <- c("0-30 m", "30-60 m", "60-130 m", "130+ m")
+fish1$depth <- cut(fish1$Avg_Depth..m., breaks = b, labels = names)
+
+#Filter depths to only hace 30-60m and 60-130m and sum the total density for each line for each species.
+fish1<-fish1%>%
+  filter(depth=="30-60 m" | depth=="60-130 m")%>%
+  group_by(Survey_Year, Region, MPA_Group, Type, Designation, Dive, Line, depth, Habitat_Type, CommonName, SpeciesName)%>%
+  summarize(totalden=sum(Density..m2.))
+
+fish1$taxa<-"fish"
+#Repeat for invertebrate data
+summary(invert)
+
+#Filter out any MPA type that is not SMCA or SMR
+invert1<-invert%>%
+  group_by(Survey_Year, Region, MPA_Group, Type, Designation, Dive, Line, Habitat_Type, Avg_Depth..m., CommonName, SpeciesName)%>%
+  filter(Type=="SMCA" | Type=="SMR")
+
+#Bin depth data  
+invert1$depth <- cut(invert1$Avg_Depth..m., breaks = b, labels = names)
+
+#Filter depths to only hace 30-60m and 60-130m and sum the total density for each line for each species.
+invert1<-invert1%>%
+  filter(depth=="30-60 m" | depth=="60-130 m")%>%
+  group_by(Survey_Year, Region, MPA_Group, Type, Designation, Dive, Line, depth, Habitat_Type, CommonName, SpeciesName)%>%
+  summarize(totalden=sum(Density..m2.))
+
+invert1$taxa<-"invertebrate"
+#Merge the fish and invertebrate datasets into one by using rbind to have columns match
+rovall<-rbind(fish1, invert1)
+
+#Write csv file for combined datasets
+#write.csv(rovall, "ROV-fishandinvertCombined_2005-2019.csv")
+```
+
+Read in combined data set (can skip code above) and examine total densities for fish and invertebrates. 
+
+```{r cars}
+#rovall<-read.csv("ROV-fishandinvertCombined_2005-2019.csv")
+
+#Sum the density of all fishes for a single Line ID (Dive and Line) to calculate total density
+rov<-rovall%>%
+  group_by(Survey_Year, Region, MPA_Group, Type, Designation, Dive, Line, depth, Habitat_Type, taxa)%>%
+  filter(CommonName!="YOY")%>%
+  summarize(Total.Density=sum(totalden))
+
+#Calculate the mean density for fish and invertebrates at each MPA per Year with depth and habitat type. 
+rov1<-rov%>%
+   group_by(Survey_Year, Region, MPA_Group, Type, Designation, depth, Habitat_Type, taxa)%>%
+  summarize(MeanDensity=mean(Total.Density),
+                       SE=std.error(Total.Density), 
+                       lower = mean(Total.Density) - qt(1- alpha/2, (n() - 1))*sd(Total.Density)/sqrt(n()),
+                       upper = mean(Total.Density) + qt(1- alpha/2, (n() - 1))*sd(Total.Density)/sqrt(n()))
+
+#Fill NAs with 0s 
+rov1[is.na(rov1)] <- 0
+
+#Filter out unusable habitat codes
+rov1<-rov1%>%
+  filter(Habitat_Type!="Unusable")
+```
+
+Start with simple plots for each MPA by depth and habitat type across years
+
+```{r}
+den_fun1<-function(parameter, dt){
+  
+
+#plot total fish density through time for MPA and Reference Sites
+p<-(ggplot(dt[dt$MPA_Group==parameter,], aes(x=Survey_Year, y=MeanDensity, fill=Designation, shape=taxa)) + 
+  #geom_histogram(color="black", position="dodge")+
+  geom_point(size=5, alpha=0.5, position=position_dodge(0.3))+
+    geom_line(aes(color=Designation, linetype=taxa))+
+    scale_shape_manual(values=c(21,22))+
+  scale_fill_manual(values=c('#b2182b','#2166ac'))+
+  #geom_smooth(method='lm', se=FALSE, aes(color=Site))+
+  scale_color_manual(values=c('#b2182b','#2166ac'))+
+  ylab('Total Density (#/m2)')+
+  xlab("Year")+
+  scale_x_continuous(breaks= c(2005, 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013,  2014, 2015, 2016,  2017, 2018, 2019))+
+  geom_hline(yintercept = 0, linetype="dashed")+
+  geom_errorbar(aes(ymax=upper, ymin=lower),
+                position=position_dodge(0.3), width=0)+
+  #scale_y_continuous(breaks= pretty_breaks())+
+    facet_grid(Habitat_Type~Type)+
+  # xlim(c(2006,2021))+
+  ggtitle(paste0(parameter))+
+  theme(plot.title = element_text(size = 16, face = "bold")))+
+  theme(panel.border = element_rect(colour = "black", fill=NA, size=1))+
+  guides(fill=guide_legend(override.aes=list(shape=21)))
+
+return(p)
+}
+
+denplot_list1 <-lapply(unique(rov1$MPA_Group), den_fun1, dt=rov1)
+denplot_list1
+
+pdf("/Users/shelbyziegler/Desktop/Git Hub/deepwater-MPAs/Invert and Fish Analyses/Figures/Fish-InvertDensityPlots.pdf")
+pdf.options(width = 11, height = 8.5)
+for (i in 1:length(denplot_list1)){
+  print(denplot_list1[[i]])
+}
+dev.off()
+
+```
