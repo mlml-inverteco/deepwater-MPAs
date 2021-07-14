@@ -85,6 +85,7 @@ rov<-rovall%>%
   filter(CommonName!="YOY")%>%
   summarize(Total.Density=sum(totalden))
 
+
 #Calculate the mean density for fish and invertebrates at each MPA per Year with depth and habitat type. 
 rov1<-rov%>%
    group_by(Survey_Year, Region, MPA_Group, Type, Designation, depth, Habitat_Type, taxa)%>%
@@ -99,6 +100,12 @@ rov1[is.na(rov1)] <- 0
 #Filter out unusable habitat codes
 rov1<-rov1%>%
   filter(Habitat_Type!="Unusable")
+
+rov1$Year<-as.factor(rov1$Survey_Year)
+#Anova
+anova(lm(MeanDensity~MPA_Group*Designation*Year*taxa, data=rov1))
+summary(lm(Total.Density~MPA_Group*Designation*Year, data=rov))
+
 ```
 
 Start with simple plots for each MPA by depth and habitat type across years
@@ -148,20 +155,20 @@ denplot_list2 <-lapply(unique(rov60$MPA_Group), den_fun1, dt=rov60)
 denplot_list2
 
 #Save all figures in the list into single pdf
-pdf("/Users/shelbyziegler/Desktop/Git Hub/deepwater-MPAs/Invert and Fish Analyses /Figures/Fish-InvertDensityPlots30-60.pdf")
-pdf.options(width = 11, height = 8.5)
-for (i in 1:length(denplot_list1)){
-  print(denplot_list1[[i]])
-}
-dev.off()
+#pdf("/Users/shelbyziegler/Desktop/Git Hub/deepwater-MPAs/Invert and Fish Analyses /Figures/Fish-InvertDensityPlots30-60.pdf")
+#pdf.options(width = 11, height = 8.5)
+#for (i in 1:length(denplot_list1)){
+#  print(denplot_list1[[i]])
+#}
+#dev.off()
 
 #Save all figures in the list into single pdf
-pdf("/Users/shelbyziegler/Desktop/Git Hub/deepwater-MPAs/Invert and Fish Analyses /Figures/Fish-InvertDensityPlots60-130.pdf")
-pdf.options(width = 11, height = 8.5)
-for (i in 1:length(denplot_list2)){
-  print(denplot_list2[[i]])
-}
-dev.off()
+#pdf("/Users/shelbyziegler/Desktop/Git Hub/deepwater-MPAs/Invert and Fish Analyses /Figures/Fish-InvertDensityPlots60-130.pdf")
+#pdf.options(width = 11, height = 8.5)
+#for (i in 1:length(denplot_list2)){
+#  print(denplot_list2[[i]])
+#}
+#dev.off()
 
 ```
 
@@ -221,9 +228,15 @@ return(p)
 rrplot_list <-lapply(unique(rovRR30$MPA_Group), RR_fun1, dt=rovRR30)
 rrplot_list
 
+#Run 4 way interactive anova to determine variables that drive RRs. 
+anova(lm(RR~MPA_Group*taxa*Habitat_Type*Year, data=rovRR30))
+
 #Save as list and plot figures
 rrplot_list1 <-lapply(unique(rovRR60$MPA_Group), RR_fun1, dt=rovRR60)
 rrplot_list1
+
+#Run 4 way interactive anova to determine variables that drive RRs. 
+anova(lm(RR~MPA_Group*taxa*Habitat_Type*Year, data=rovRR60))
 
 
 #Save all figures in the list into single pdf
@@ -241,6 +254,8 @@ for (i in 1:length(rrplot_list1)){
   print(rrplot_list1[[i]])
 }
 dev.off()
+
+
 ```
 
 Run community composition analyses for both fish and inverts combined
@@ -267,14 +282,15 @@ rovsppdata<-rovspp2[,-c(1:5)]
 
 #Add a column of 1s to ensure there are no rows with all 0s (does not change the similarity between rows)
 rovsppdata$add<-1
+rovsppmeta$Year<-as.factor(rovsppmeta$Survey_Year)
 
-
+library(vegan)
 #create bray curtis distribution
 abund.dist <- vegdist(rovsppdata, method = "bray")
 attach(rovsppmeta) 
 
 #Run PERMANOVA
-adonis(abund.dist~MPA_Group*Designation)
+adonis(abund.dist~MPA_Group*Designation*Year)
 
 
 ```
@@ -291,12 +307,83 @@ S <- specnumber(rovsppdata)
 #pielou's eveness
 J <- shan/log(S)
 
-#add richness and eveness to df
+#add shannon, simpson, richness and eveness to df
 rovsppmeta$richness<-S
 rovsppmeta$eveness<-J
 rovsppmeta$shannon<-shan
 rovsppmeta$simpson<-simp
 
+#filter out South region - plot out all diversity metrics
+rovsppmetaS<-rovsppmeta%>%
+  filter(Region=="South")
+
+ggplot(rovsppmetaS, aes(x=Year, y=shannon, fill=Designation))+
+  geom_point(shape=21, color="black")+
+  facet_wrap(~MPA_Group)+
+  geom_smooth(method='lm', se=FALSE, aes(color=Designation))
+  
+ggplot(rovsppmetaS, aes(x=Year, y=simpson, fill=Designation))+
+  geom_point(shape=21, color="black")+
+  facet_wrap(~MPA_Group)+
+  geom_smooth(method='lm', se=FALSE, aes(color=Designation))
+  
+ggplot(rovsppmetaS, aes(x=Year, y=eveness, fill=Designation))+
+  geom_point(shape=21, color="black")+
+  facet_wrap(~MPA_Group)+
+  geom_smooth(method='lm', se=FALSE, aes(color=Designation))
+  
+ggplot(rovsppmetaS, aes(x=Year, y=richness, fill=Designation))+
+  geom_point(shape=21, color="black")+
+  facet_wrap(~MPA_Group)+
+  geom_smooth(method='lm', se=FALSE, aes(color=Designation))
+  
+#filter out Central region - plot out all diversity metrics  
+rovsppmetaC<-rovsppmeta%>%
+  filter(Region=="Central")
+
+ggplot(rovsppmetaC, aes(x=Year, y=shannon, fill=Designation))+
+  geom_point(shape=21, color="black")+
+  facet_wrap(~MPA_Group)+
+  geom_smooth(method='lm', se=FALSE, aes(color=Designation))
+  
+ggplot(rovsppmetaC, aes(x=Year, y=simpson, fill=Designation))+
+  geom_point(shape=21, color="black")+
+  facet_wrap(~MPA_Group)+
+  geom_smooth(method='lm', se=FALSE, aes(color=Designation))
+  
+ggplot(rovsppmetaC, aes(x=Year, y=eveness, fill=Designation))+
+  geom_point(shape=21, color="black")+
+  facet_wrap(~MPA_Group)+
+  geom_smooth(method='lm', se=FALSE, aes(color=Designation))
+  
+ggplot(rovsppmetaC, aes(x=Year, y=richness, fill=Designation))+
+  geom_point(shape=21, color="black")+
+  facet_wrap(~MPA_Group)+
+  geom_smooth(method='lm', se=FALSE, aes(color=Designation))
+      
+#filter out North region - plot out all diversity metrics
+rovsppmetaN<-rovsppmeta%>%
+  filter(Region=="North")
+
+ggplot(rovsppmetaN, aes(x=Year, y=shannon, fill=Designation))+
+  geom_point(shape=21, color="black")+
+  facet_wrap(~MPA_Group)+
+  geom_smooth(method='lm', se=FALSE, aes(color=Designation))
+  
+ggplot(rovsppmetaN, aes(x=Year, y=simpson, fill=Designation))+
+  geom_point(shape=21, color="black")+
+  facet_wrap(~MPA_Group)+
+  geom_smooth(method='lm', se=FALSE, aes(color=Designation))
+  
+ggplot(rovsppmetaN, aes(x=Year, y=eveness, fill=Designation))+
+  geom_point(shape=21, color="black")+
+  facet_wrap(~MPA_Group)+
+  geom_smooth(method='lm', se=FALSE, aes(color=Designation))
+  
+ggplot(rovsppmetaN, aes(x=Year, y=richness, fill=Designation))+
+  geom_point(shape=21, color="black")+
+  geom_smooth(method='lm', se=FALSE, aes(color=Designation))+
+  facet_wrap(~MPA_Group)
 ```
 
 Run NMDS for South Region
