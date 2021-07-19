@@ -240,20 +240,20 @@ anova(lm(RR~MPA_Group*taxa*Habitat_Type*Year, data=rovRR60))
 
 
 #Save all figures in the list into single pdf
-pdf("/Users/shelbyziegler/Desktop/Git Hub/deepwater-MPAs/Invert and Fish Analyses /Figures/Fish-InvertRRPlots30-60.pdf")
-pdf.options(width = 11, height = 8.5)
-for (i in 1:length(rrplot_list)){
-  print(rrplot_list[[i]])
-}
-dev.off()
+#pdf("/Users/shelbyziegler/Desktop/Git Hub/deepwater-MPAs/Invert and Fish Analyses /Figures/Fish-InvertRRPlots30-60.pdf")
+#pdf.options(width = 11, height = 8.5)
+#for (i in 1:length(rrplot_list)){
+#  print(rrplot_list[[i]])
+#}
+#dev.off()
 
 #Save all figures in the list into single pdf
-pdf("/Users/shelbyziegler/Desktop/Git Hub/deepwater-MPAs/Invert and Fish Analyses /Figures/Fish-InvertRRPlots60-130.pdf")
-pdf.options(width = 11, height = 8.5)
-for (i in 1:length(rrplot_list1)){
-  print(rrplot_list1[[i]])
-}
-dev.off()
+#pdf("/Users/shelbyziegler/Desktop/Git Hub/deepwater-MPAs/Invert and Fish Analyses /Figures/Fish-InvertRRPlots60-130.pdf")
+#pdf.options(width = 11, height = 8.5)
+#for (i in 1:length(rrplot_list1)){
+#  print(rrplot_list1[[i]])
+#}
+#dev.off()
 
 
 ```
@@ -317,22 +317,26 @@ rovsppmeta$simpson<-simp
 rovsppmetaS<-rovsppmeta%>%
   filter(Region=="South")
 
-ggplot(rovsppmetaS, aes(x=Year, y=shannon, fill=Designation))+
+summary(lm(richness~Survey_Year, data=rovsppmetaS))
+summary(lm(shannon~Survey_Year, data=rovsppmetaS))
+summary(lm(eveness~Survey_Year, data=rovsppmetaS))
+
+ggplot(rovsppmetaS, aes(x=Survey_Year, y=shannon, fill=Designation))+
   geom_point(shape=21, color="black")+
   facet_wrap(~MPA_Group)+
   geom_smooth(method='lm', se=FALSE, aes(color=Designation))
   
-ggplot(rovsppmetaS, aes(x=Year, y=simpson, fill=Designation))+
+ggplot(rovsppmetaS, aes(x=Survey_Year, y=simpson, fill=Designation))+
   geom_point(shape=21, color="black")+
   facet_wrap(~MPA_Group)+
   geom_smooth(method='lm', se=FALSE, aes(color=Designation))
   
-ggplot(rovsppmetaS, aes(x=Year, y=eveness, fill=Designation))+
+ggplot(rovsppmetaS, aes(x=Survey_Year, y=eveness, fill=Designation))+
   geom_point(shape=21, color="black")+
   facet_wrap(~MPA_Group)+
   geom_smooth(method='lm', se=FALSE, aes(color=Designation))
   
-ggplot(rovsppmetaS, aes(x=Year, y=richness, fill=Designation))+
+ggplot(rovsppmetaS, aes(x=Survey_Year, y=richness, fill=Designation))+
   geom_point(shape=21, color="black")+
   facet_wrap(~MPA_Group)+
   geom_smooth(method='lm', se=FALSE, aes(color=Designation))
@@ -341,22 +345,26 @@ ggplot(rovsppmetaS, aes(x=Year, y=richness, fill=Designation))+
 rovsppmetaC<-rovsppmeta%>%
   filter(Region=="Central")
 
-ggplot(rovsppmetaC, aes(x=Year, y=shannon, fill=Designation))+
+summary(lm(richness~Survey_Year, data=rovsppmetaC))
+summary(lm(shannon~Survey_Year, data=rovsppmetaC))
+summary(lm(eveness~Survey_Year, data=rovsppmetaC))
+
+ggplot(rovsppmetaC, aes(x=Survey_Year, y=shannon, fill=Designation))+
   geom_point(shape=21, color="black")+
   facet_wrap(~MPA_Group)+
   geom_smooth(method='lm', se=FALSE, aes(color=Designation))
   
-ggplot(rovsppmetaC, aes(x=Year, y=simpson, fill=Designation))+
+ggplot(rovsppmetaC, aes(x=Survey_Year, y=simpson, fill=Designation))+
   geom_point(shape=21, color="black")+
   facet_wrap(~MPA_Group)+
   geom_smooth(method='lm', se=FALSE, aes(color=Designation))
   
-ggplot(rovsppmetaC, aes(x=Year, y=eveness, fill=Designation))+
+ggplot(rovsppmetaC, aes(x=Survey_Year, y=eveness, fill=Designation))+
   geom_point(shape=21, color="black")+
   facet_wrap(~MPA_Group)+
   geom_smooth(method='lm', se=FALSE, aes(color=Designation))
   
-ggplot(rovsppmetaC, aes(x=Year, y=richness, fill=Designation))+
+ggplot(rovsppmetaC, aes(x=Survey_Year, y=richness, fill=Designation))+
   geom_point(shape=21, color="black")+
   facet_wrap(~MPA_Group)+
   geom_smooth(method='lm', se=FALSE, aes(color=Designation))
@@ -365,22 +373,26 @@ ggplot(rovsppmetaC, aes(x=Year, y=richness, fill=Designation))+
 rovsppmetaN<-rovsppmeta%>%
   filter(Region=="North")
 
-ggplot(rovsppmetaN, aes(x=Year, y=shannon, fill=Designation))+
+summary(lm(richness~Survey_Year, data=rovsppmetaN))
+summary(lm(shannon~Survey_Year, data=rovsppmetaN))
+summary(lm(eveness~Survey_Year, data=rovsppmetaN))
+
+ggplot(rovsppmetaN, aes(x=Survey_Year, y=shannon, fill=Designation))+
   geom_point(shape=21, color="black")+
   facet_wrap(~MPA_Group)+
   geom_smooth(method='lm', se=FALSE, aes(color=Designation))
   
-ggplot(rovsppmetaN, aes(x=Year, y=simpson, fill=Designation))+
+ggplot(rovsppmetaN, aes(x=Survey_Year, y=simpson, fill=Designation))+
   geom_point(shape=21, color="black")+
   facet_wrap(~MPA_Group)+
   geom_smooth(method='lm', se=FALSE, aes(color=Designation))
   
-ggplot(rovsppmetaN, aes(x=Year, y=eveness, fill=Designation))+
+ggplot(rovsppmetaN, aes(x=Survey_Year, y=eveness, fill=Designation))+
   geom_point(shape=21, color="black")+
   facet_wrap(~MPA_Group)+
   geom_smooth(method='lm', se=FALSE, aes(color=Designation))
   
-ggplot(rovsppmetaN, aes(x=Year, y=richness, fill=Designation))+
+ggplot(rovsppmetaN, aes(x=Survey_Year, y=richness, fill=Designation))+
   geom_point(shape=21, color="black")+
   geom_smooth(method='lm', se=FALSE, aes(color=Designation))+
   facet_wrap(~MPA_Group)
