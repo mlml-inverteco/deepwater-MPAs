@@ -1,0 +1,397 @@
+---
+title: "Regional_nMDS_SIMPER_PERMANOVA"
+author: "Jackson Hoeke"
+date: "July 28, 2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+library(ggpubr)
+library(tidyverse)
+library(plyr)
+library(dplyr)
+library(vegan)
+library(cowplot)
+library(grid)
+library(purrr)
+setwd("C:/Users/jacks/Desktop/Marine Bio/Deepwater_MPAs/Subprojects/NMDS/Final_NMDS")
+```
+
+```{r wrap-hook}
+library(knitr)
+hook_output = knit_hooks$get('output')
+knit_hooks$set(output = function(x, options) {
+  # this hook is used only when the linewidth option is not NULL
+  if (!is.null(n <- options$linewidth)) {
+    x = knitr:::split_lines(x)
+    # any lines wider than n should be wrapped
+    if (any(nchar(x) > n)) x = strwrap(x, width = n)
+    x = paste(x, collapse = '\n')
+  }
+  hook_output(x, options)
+})
+```
+
+# nMDS Plots
+```{r, linewidth=95}
+# Import data
+density <- data.frame(read.csv("invert_matrix_transects.csv"))
+density[is.na(density)] <- 0
+
+# Create groups using 'newnames' to split data
+
+grp.MPA <- density %>% 
+  group_by_all() %>%
+  mutate(newnames=paste0(Region, Designation, Year)) 
+
+# Split data into smaller frames
+
+split.MPA <- split(grp.MPA, grp.MPA$newnames)
+for (I in 1:length(split.MPA)) {assign(unique(split.MPA[[I]]$newnames), 
+                                       split.MPA[[I]])}
+
+# Determine average densities of organisms for each Region, Designation, 
+# and Year
+
+take.avg <- lapply(split.MPA, function(x){
+  
+  avgs <- colMeans(x[,9:165])
+  avgs <- as.data.frame(avgs)
+  t.avgs <- as.data.frame(transpose(avgs))
+  colnames(t.avgs) <- rownames(avgs)
+  lab <- data.frame(Year=x[1,2], Region=x[1,3], MPA_Group=x[1,4], 
+                    Designation=x[1,7])
+  region.unit <- cbind(lab,t.avgs)
+  
+})
+
+# Bind rows of new data frames together from the split
+
+only.avgs <- bind_rows(take.avg)
+
+# create data frame of labels (Year, Region, MPA, Designation)
+
+reg.labels <- only.avgs[,1:4]
+
+# create data frame of species matrix
+
+reg.data <- only.avgs[,5:160]
+
+# Generate MDS 
+
+set.seed(13)
+reg.mds <- metaMDS(reg.data, distance = "bray", k = 2, trymax = 999,
+                       autotransform = FALSE)
+
+# Divide MDS into data and species MDS scores across 2 axes
+
+data.scores <- as.data.frame(scores(reg.mds))
+data.scores$site <- rownames(data.scores)
+data.scores <- cbind(data.scores,reg.labels)
+head(data.scores)
+species.scores<- as.data.frame(scores(reg.mds, "species"))
+species.scores$species <- rownames(species.scores)
+head(species.scores)
+
+# Plot stress
+
+stressplot(reg.mds)
+
+# Plot nMDS in ggplot
+
+ggplot() +
+  stat_ellipse(data=data.scores,aes(x=NMDS1,y=NMDS2, color=Region, 
+                                    linetype=Designation), lwd=2, alpha=0.5) +
+  geom_point(data=data.scores,aes(x=NMDS1,y=NMDS2, fill=Region, pch=Designation),  
+             size=5, alpha=0.3) +
+  guides(pch = "none", size = "none") +
+  ggtitle("MPA vs. Reference") +
+  scale_linetype_manual(values=c(1,2), breaks = c("MPA","Reference")) +
+  scale_shape_manual(values=c(21,22)) +
+  scale_color_manual(values=c("red","green","blue"), 
+                     breaks = c("North", "Central", "South")) +
+  scale_fill_manual(values=c("red","green","blue"), 
+                    breaks = c("North", "Central", "South")) +
+  theme(axis.text.x = element_blank(),  # remove x-axis text
+        axis.text.y = element_blank(), # remove y-axis text
+        axis.ticks = element_blank(),  # remove axis ticks
+        axis.title.x = element_text(size=18), # remove x-axis labels
+        axis.title.y = element_text(size=18), # remove y-axis labels
+        panel.background = element_blank(), 
+        panel.grid.major = element_blank(),  #remove major-grid labels
+        panel.grid.minor = element_blank(),  #remove minor-grid labels
+        plot.background = element_blank(),
+        plot.title = element_text(size=20))
+
+# Now to use facets to plot several NMDSs at once
+
+  base <- ggplot() +
+    stat_ellipse(data=data.scores,
+                 aes(x=NMDS1,y=NMDS2, color=Region, linetype=Designation), 
+                 lwd=2, alpha=0.5) +
+    geom_point(data=data.scores,
+               aes(x=NMDS1,y=NMDS2, fill=Region, pch=Designation),
+               size=5, alpha=0.3) +
+    guides(pch = "none", size = "none") +
+    ggtitle("MPA vs. Reference") +
+    scale_linetype_manual(values=c(1,2), 
+                          breaks = c("MPA","Reference")) +
+    scale_shape_manual(values=c(21,22)) +
+    scale_color_manual(values=c("red","green","blue"), 
+                       breaks = c("North", "Central", "South")) +
+    scale_fill_manual(values=c("red","green","blue"), 
+                      breaks = c("North", "Central", "South")) +
+    theme(axis.text.x = element_blank(),  # remove x-axis text
+          axis.text.y = element_blank(), # remove y-axis text
+          axis.ticks = element_blank(),  # remove axis ticks
+          axis.title.x = element_text(size=18), # remove x-axis labels
+          axis.title.y = element_text(size=18), # remove y-axis labels
+          panel.background = element_blank(), 
+          panel.grid.major = element_blank(),  #remove major-grid labels
+          panel.grid.minor = element_blank(),  #remove minor-grid labels
+          plot.background = element_blank(),
+          plot.title = element_text(size=20))
+
+# First by region
+  
+base + facet_wrap(~Region)
+
+# Then by Year
+
+base + facet_wrap(~Year) +
+  theme(strip.text.x = element_text(size = 15))
+
+```
+## SIMPER analysis
+```{r, linewidth=95}
+# Use data frames set up for nMDS to use in SIMPER analysis
+# First, compare differences between regions
+
+set.seed(13)
+sim <- with(reg.labels, simper(reg.data, Region))
+sim
+
+# Divide into species and cumulative contributions, then make data frames from these
+# vectors
+
+CN_sp <- c("California sea cucumber","Slipper sea cucumber",
+           "Short red gorgonian", "UI lobed sponge", 
+           "UI lobed sponge/tunicate","White plumed anemone",
+           "Red sea urchin","California hydrocoral",
+           "UI branched byrozoan","UI branched sponge","Red sea star")
+CN_con <- c(0.1773808,0.3059056,0.3770985,0.4353616,0.4837151,
+            0.5308375,0.5771436,0.6178814,0.6524418,0.6848954,0.7150882)
+CN_data <- data.frame(CN_sp,CN_con)
+CS_sp <- c("White sea urchin","UI lobed sponge tunicate",
+           "UI lobed sponge","UI branched bryozoan",
+           "White sea pen","California sea cucumber",
+           "Red sea urchin","Bat star","Sea whip",
+           "White branched sea cucumber","UI laced/lobed bryozoan",
+           "Red sea star","Purple gorgonian","UI branched sponge")
+CS_con <- c(0.1726507,0.2420651,0.3044175,0.3600304,0.4129377,
+            0.4594726,0.5008071,0.5367493,0.5711367,0.6037940,
+            0.6358096,0.6622935,0.6880643,0.7127600)
+CS_data <- data.frame(CS_sp,CS_con)
+NS_sp <- c("California sea cucumber","White sea urchin",
+           "Slipper sea cucumber","Short red gorgonian",
+           "Red sea urchin","White plumed anemone",
+           "UI branched bryozoan","White branched sea cucumber",
+           "Bat star","California hydrocoral","White sea pen")
+NS_con <- c(0.1533639,0.2740252,0.3850616,0.444977,0.4930209,
+            0.5388162,0.5821998,0.6185102,0.6523830,0.6838560,
+            0.7130625)
+NS_data <- data.frame(NS_sp,NS_con)
+
+# Plot contributions with one graph per region
+
+CN_graph <- ggplot(CN_data, aes(y=CN_con,x=factor(CN_sp,level=CN_sp))) +
+  geom_bar(position="dodge", stat="identity", fill='#ff8247',color='gray') +
+  ggtitle("SIMPER analysis of species between North and Central CA") +
+  geom_hline(yintercept = 0.7,color='red',size=2) +
+  theme(axis.text.x = element_text(angle = 315,size=13),
+        plot.title = element_text(size=15),
+        axis.title = element_text(size=15)) +
+  xlab("Species") +
+  ylab("Cumulative contribution")
+CN_graph
+
+CS_graph <- ggplot(CS_data, aes(y=CS_con,x=factor(CS_sp,level=CS_sp))) +
+  geom_bar(position="dodge", stat="identity", fill='#a2cd5a',color='gray') +
+  ggtitle("SIMPER analysis of species between South and Central CA") +
+  geom_hline(yintercept = 0.7,color='red',size=2) +
+  theme(axis.text.x = element_text(angle = 315,size=13),
+        plot.title = element_text(size=15),
+        axis.title = element_text(size=15)) +
+  xlab("Species") +
+  ylab("Cumulative contribution")
+CS_graph
+
+NS_graph <- ggplot(NS_data, aes(y=NS_con,x=factor(NS_sp,level=NS_sp))) +
+  geom_bar(position="dodge", stat="identity", fill='#6495ed',color='gray') +
+  ggtitle("SIMPER analysis of species between North and South CA") +
+  geom_hline(yintercept = 0.7,color='red',size=2) +
+  theme(axis.text.x = element_text(angle = 315,size=13),
+        plot.title = element_text(size=20),
+        axis.title = element_text(size=15)) +
+  xlab("Species") +
+  ylab("Cumulative contribution")
+NS_graph
+
+# Now, use SIMPER to analyze differences in MPA vs. Reference designation
+
+set.seed(13)
+sim.des <- with(reg.labels, simper(reg.data, Designation))
+sim.des
+
+# Use the provided information to create a data frame
+
+Des_sp <- c("White sea urchin","California sea cucumber",
+            "Slipper sea cucumber","Red sea urchin",
+            "UI branched bryozoan","UI lobed sponge",
+            "UI lobed sponge/tunicate","White sea pen",
+            "Short red gorgonian","White branched sea cucumber",
+            "Bat star","White plumed anemone","UI branched sponge",
+            "California hydrocoral")
+Des_con <- c(0.1469395,0.2417168,0.3016337,0.3525581,0.4011254,
+             0.4458663,0.4867733,0.5272089,0.5664956,0.6020061,
+             0.6326269,0.6614230,0.6894982,0.7165490)
+Des_data <- data.frame(Des_sp,Des_con)
+
+# And plot it
+
+Des_graph <- ggplot(Des_data, aes(y=Des_con,x=factor(Des_sp,level=Des_sp))) +
+  geom_bar(position="dodge", stat="identity", fill='#bf3eff',color='gray') +
+  ggtitle("SIMPER analysis of species between MPAs and Reference sites") +
+  geom_hline(yintercept = 0.7,color='red',size=2) +
+  theme(axis.text.x = element_text(angle = 315,size=13),
+        plot.title = element_text(size=20),
+        axis.title = element_text(size=15)) +
+  xlab("Species") +
+  ylab("Cumulative contribution")
+Des_graph
+
+# Now, to subset by region & SIMPER by designation separately
+
+North.avg <- subset(only.avgs, Region == "North")
+Central.avg <- subset(only.avgs, Region == "Central")
+South.avg <- subset(only.avgs, Region == "South")
+
+# North
+
+north.labels <- North.avg[,1:4]
+north.data <- North.avg[,5:160]
+set.seed(13)
+north.sim <- with(north.labels, simper(north.data, Designation))
+north.sim
+north_sp <- c("Slipper sea cucumber","California sea cucumber",
+              "Short red gorgonian","Red sea urchin",
+              "California hydrocoral","UI branched bryozoan",
+              "UI branched sponge","White branched sea cucumber",
+              "UI lobed sponge")
+north_con <- c(0.1855598,0.3043917,0.4060153,0.4688773,0.5311454,
+               0.5863474,0.6310009,0.6721305,0.7073433)
+north_data <- data.frame(north_sp,north_con)
+north_graph <- ggplot(north_data, 
+                      aes(y=north_con,x=factor(north_sp,level=north_sp))) +
+  geom_bar(position="dodge", stat="identity", fill='#ff6a6a',color='gray') +
+  ggtitle("SIMPER analysis of species between MPAs and Reference sites in Northern CA") +
+  geom_hline(yintercept = 0.7,color='red',size=2) +
+  theme(axis.text.x = element_text(angle = 315,size=13),
+        plot.title = element_text(size=15),
+        axis.title = element_text(size=15)) +
+  xlab("Species") +
+  ylab("Cumulative contribution")
+north_graph
+
+# Central
+
+central.labels <- Central.avg[,1:4]
+central.data <- Central.avg[,5:160]
+set.seed(13)
+central.sim <- with(central.labels, simper(central.data, Designation))
+central.sim
+central_sp <- c("UI lobed sponge/tunicate","UI lobed sponge",
+                "California sea cucumber","White sea urchin",
+                "Short red gorgonian","Purple sea urchin",
+                "Red sea star","White plumed anemone",
+                "California hydrocoral","UI branched sponge",
+                "Bat star","UI branched bryozoan")
+central_con <- c(0.1278430,0.2486069,0.3276743,0.3883098,0.4344837,
+                 0.4778682,0.5206175,0.5596661,0.5978635,0.6357187,
+                 0.6703310,0.7013164)
+central_data <- data.frame(central_sp,central_con)
+central_graph <- ggplot(central_data, aes(y=central_con,x=factor(central_sp,level=central_sp))) +
+  geom_bar(position="dodge", stat="identity", fill='#76ee00',color='gray') +
+  ggtitle("SIMPER analysis of species between MPAs and Reference sites in Central CA") +
+  geom_hline(yintercept = 0.7,color='red',size=2) +
+  theme(axis.text.x = element_text(angle = 315,size=13),
+        plot.title = element_text(size=15),
+        axis.title = element_text(size=15)) +
+  xlab("Species") +
+  ylab("Cumulative contribution")
+central_graph
+
+# South
+
+south.labels <- South.avg[,1:4]
+south.data <- South.avg[,5:160]
+set.seed(13)
+south.sim <- with(south.labels, simper(south.data, Designation))
+south.sim
+south_sp <- c("White sea urchin","White sea pen","Red sea urchin",
+              "UI branched bryozoan","White branched sea cucumber",
+              "Purple gorgonian","UI laced lobed bryozoan","Sea whip")
+south_con <- c(0.3150594,0.3927712,0.4616202,0.5259156,0.5901728,
+               0.6422199,0.6887477,0.7325898)
+south_data <- data.frame(south_sp,south_con)
+south_graph <- ggplot(south_data, 
+                      aes(y=south_con,x=factor(south_sp,level=south_sp))) +
+  geom_bar(position="dodge", stat="identity", fill='#6495ed',color='gray') +
+  ggtitle("SIMPER analysis of species between MPAs and Reference sites in Southern CA") +
+  geom_hline(yintercept = 0.7,color='red',size=2) +
+  theme(axis.text.x = element_text(angle = 315,size=13),
+        plot.title = element_text(size=15),
+        axis.title = element_text(size=15)) +
+  xlab("Species") +
+  ylab("Cumulative contribution")
+south_graph
+```
+## PERMANOVA
+```{r, linewidth=95}
+# PERMANOVA assumptions
+
+# 1) Objects in the data set are exchangable under the 
+# null hypothesis
+
+# 2) Exchangable objects (sites, samples, observations, 
+# etc.) are independent
+
+# 3) Exchangable objects have similar multivariate 
+# dispension(i.e. each group has a similar degree of 
+# multivariate scatter)
+
+# Basically, so long as the data is theoretically exchangable 
+# (one site COULD be identical to another) and the observations 
+# are independent, then the test meets assumptions and can be run.
+
+# Run with Designation*Region
+
+set.seed(13)
+reg.div <- adonis2(reg.data ~ Region*Designation, 
+                   data = reg.labels, permutations = 999, 
+                   method = "bray")
+reg.div
+
+# Run with just Designation to see if there is a significant difference
+
+set.seed(13)
+reg.div2 <- adonis2(reg.data ~ Designation, 
+                    data = reg.labels, permutations = 999, 
+                    method = "bray")
+reg.div2
+
+# No change in significance, use the interaction analysis in final results. 
+```
+
