@@ -323,8 +323,13 @@ summary(lm(eveness~Survey_Year, data=rovsppmetaS))
 
 ggplot(rovsppmetaS, aes(x=Survey_Year, y=shannon, fill=Designation))+
   geom_point(shape=21, color="black")+
-  facet_wrap(~MPA_Group)+
-  geom_smooth(method='lm', se=FALSE, aes(color=Designation))
+  facet_wrap(~MPA_Group, ncol=5)+
+  scale_fill_manual(values=c("red", "blue"))+
+  geom_smooth(method='lm', se=FALSE, aes(color=Designation))+
+  scale_color_manual(values=c("red", "blue"))+
+  ggtitle("Fish and Invertebrate Diversity (South)")+
+    xlab("Year")+
+  ylab("Shannon-Weiner Diversity")
   
 ggplot(rovsppmetaS, aes(x=Survey_Year, y=simpson, fill=Designation))+
   geom_point(shape=21, color="black")+
@@ -351,8 +356,13 @@ summary(lm(eveness~Survey_Year, data=rovsppmetaC))
 
 ggplot(rovsppmetaC, aes(x=Survey_Year, y=shannon, fill=Designation))+
   geom_point(shape=21, color="black")+
-  facet_wrap(~MPA_Group)+
-  geom_smooth(method='lm', se=FALSE, aes(color=Designation))
+   facet_wrap(~MPA_Group, ncol=5)+
+  scale_fill_manual(values=c("red", "blue"))+
+  xlab("Year")+
+  ylab("Shannon-Weiner Diversity")+
+  geom_smooth(method='lm', se=FALSE, aes(color=Designation))+
+  scale_color_manual(values=c("red", "blue"))+
+  ggtitle("Fish and Invertebrate Diversity (Central)")
   
 ggplot(rovsppmetaC, aes(x=Survey_Year, y=simpson, fill=Designation))+
   geom_point(shape=21, color="black")+
@@ -380,7 +390,14 @@ summary(lm(eveness~Survey_Year, data=rovsppmetaN))
 ggplot(rovsppmetaN, aes(x=Survey_Year, y=shannon, fill=Designation))+
   geom_point(shape=21, color="black")+
   facet_wrap(~MPA_Group)+
-  geom_smooth(method='lm', se=FALSE, aes(color=Designation))
+  scale_fill_manual(values=c("red", "blue"))+
+  xlab("Year")+
+  ylab("Shannon-Weiner Diversity")+
+  geom_smooth(method='lm', se=FALSE, aes(color=Designation))+
+  scale_color_manual(values=c("red", "blue"))+
+  ggtitle("Fish and Invertebrate Diversity (North)")+
+  scale_x_continuous(breaks=c(2011, 2013, 2015, 2017, 2019))
+  
   
 ggplot(rovsppmetaN, aes(x=Survey_Year, y=simpson, fill=Designation))+
   geom_point(shape=21, color="black")+
@@ -414,7 +431,7 @@ Sprac_NMDS=metaMDS(rovdataS,k=2,trymax=1000)
 envfit(Sprac_NMDS, rovdataS)
 nmds.envfit <- envfit(Sprac_NMDS, rovmetaS, permutations = 999)
 spp.fit <- envfit(Sprac_NMDS, rovdataS, permutations = 999)
-#stress is 0.113
+#stress is 0.18
 #Stress w/out year is 0.161
 stressplot(Sprac_NMDS)
  
@@ -479,7 +496,7 @@ ggplot(nmsdfS, aes(x=NMS1, y=NMS2, shape=Designation, fill=Year))+
   theme(axis.text.x = element_text(angle = 90, hjust = 1))+
   stat_ellipse(level=0.95, size=1.1, aes(color=Year, linetype=Designation))+
   facet_wrap(~Survey_Year)+
-  ggtitle("Community Composition By Year (South)")+
+  ggtitle("Fish and Invertebrate Community Composition By Year (South)")+
     theme(plot.title = element_text(size = 16, face = "bold"))+
   theme(panel.border = element_rect(colour = "black", fill=NA, size=1))+
   theme(panel.border = element_rect(colour = "black", fill=NA, size=1))+
@@ -520,8 +537,8 @@ Cprac_NMDS=metaMDS(rovdataC,k=2,trymax=1000)
 envfit(Cprac_NMDS, rovdataC)
 nmds.envfit <- envfit(Cprac_NMDS, rovmetaC, permutations = 999)
 spp.fit <- envfit(Cprac_NMDS, rovdataC, permutations = 999)
-#stress is 0.113
-#Stress w/out year is 0.161
+#stress is 0.118
+
 stressplot(Cprac_NMDS)
  
 #group treatment 
@@ -585,7 +602,7 @@ ggplot(Cnmsdf, aes(x=NMS1, y=NMS2, shape=Designation, fill=Year))+
   theme(axis.text.x = element_text(angle = 90, hjust = 1))+
   stat_ellipse(level=0.95, size=1.1, aes(color=Year, linetype=Designation))+
   facet_wrap(~Survey_Year)+
-  ggtitle("Community Composition By Year (Central)")+
+  ggtitle("Fish and Invertebrate Community Composition By Year (Central)")+
       theme(plot.title = element_text(size = 16, face = "bold"))+
   theme(panel.border = element_rect(colour = "black", fill=NA, size=1))+
   theme(panel.border = element_rect(colour = "black", fill=NA, size=1))+
@@ -685,7 +702,7 @@ ggplot(Nnmsdf, aes(x=NMS1, y=NMS2, shape=Designation, fill=Year))+
   theme(axis.text.x = element_text(angle = 90, hjust = 1))+
   stat_ellipse(level=0.95, size=1.1, aes(color=Year, linetype=Designation))+
   facet_wrap(~Survey_Year)+
-  ggtitle("Community Composition By Year (North)")+
+  ggtitle("Fish and Invertebrate Community Composition By Year (North)")+
       theme(plot.title = element_text(size = 16, face = "bold"))+
   theme(panel.border = element_rect(colour = "black", fill=NA, size=1))+
   theme(panel.border = element_rect(colour = "black", fill=NA, size=1))+
