@@ -1,2 +1,2 @@
-# deepwater-MPAs
-Repository for scripts, data, and analyses related to the invertebrate ecology lab's work studying deepwater MPAs
+# Deepwater MPAs
+Repository for scripts, data, and analyses related to the Invertebrate Ecology Lab's work studying deepwater MPAs
